@@ -1,5 +1,7 @@
 # testes [![Build Status](https://travis-ci.org/disruptek/testes.svg?branch=master)](https://travis-ci.org/disruptek/testes)
 
+A small unittest macro with some features I needed.
+
 ## Why
 
 Because `testament` and `testutils` are going nowhere fast.
