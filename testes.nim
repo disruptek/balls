@@ -28,10 +28,12 @@ proc report(ss: varargs[string, `$`]) =
   writeLine(stderr, ss)
 
 proc output(n: NimNode): NimNode =
+  assert not n.isNil
   let report = bindSym"report"
   result = newCall(report, n)
 
 proc output(t: Test; n: NimNode): NimNode =
+  assert not n.isNil
   result = output(n)
 
 proc output(t: Test; s: string): NimNode =
@@ -41,6 +43,7 @@ proc success(t: Test): NimNode =
   result = t.output("🟢 " & t.name)
 
 proc countComments(n: NimNode): int =
+  assert not n.isNil
   if n.kind == nnkStmtList:
     for _ in items(n):
       if _.kind == nnkCommentStmt:
@@ -84,11 +87,11 @@ proc renderStack(stack: seq[StackTraceEntry]) =
         result.add "$1 $2 ^ (here)" % [ spaces(len(line)), where ]
   report result.join("\n").prefixLines " 🗇 "
 
-proc renderTrace(t: Test; e: NimNode = nil): NimNode =
+proc renderTrace(t: Test; n: NimNode = nil): NimNode =
   var renderStack = bindSym"renderStack"
   var getStack = newCall(ident"getStackTraceEntries")
-  if not e.isNil:
-    getStack.add e  # get the exception's stacktrace
+  if not n.isNil:
+    getStack.add n  # get the exception's stacktrace
   result = newIfStmt((newCall(ident"stackTraceAvailable"),
                       newCall(renderStack, getStack)))
 
@@ -113,22 +116,25 @@ proc failure(t: Test): NimNode =
   result.add t.renderSource
   result.add t.setExitCode
 
-proc exceptionString(e: NimNode): NimNode =
-  result = infix(infix(newCall(ident"$", newDotExpr(e, ident"name")),
+proc exceptionString(n: NimNode): NimNode =
+  assert not n.isNil
+  result = infix(infix(newCall(ident"$", newDotExpr(n, ident"name")),
                        "&", ": ".newLit),
-                 "&", newDotExpr(e, ident"msg"))
+                 "&", newDotExpr(n, ident"msg"))
 
-proc skipped(t: Test; e: NimNode): NimNode =
+proc skipped(t: Test; n: NimNode): NimNode =
+  assert not n.isNil
   result = newStmtList()
   result.add t.output(infix(newLit("⚪ " & t.name & ": "), "&",
-                            e.exceptionString))
+                            n.exceptionString))
 
-proc exception(t: Test; e: NimNode): NimNode =
+proc exception(t: Test; n: NimNode): NimNode =
+  assert not n.isNil
   result = newStmtList()
   result.add t.output(infix(newLit("💥 " & t.name & ": "), "&",
-                            e.exceptionString))
+                            n.exceptionString))
   result.add t.renderSource
-  result.add t.renderTrace(e)
+  result.add t.renderTrace(n)
   result.add t.setExitCode
 
 proc compilerr(t: Test): NimNode =
@@ -151,6 +157,7 @@ proc wrapExcept(t: Test): NimNode =
                                    t.exception(e)))
 
 proc makeTest(n: NimNode; name: string): Test =
+  assert not n.isNil
   result = Test(name: name, orig: copyNimTree(n))
   let beuno = genSym(nskLabel, "beuno")  # all good, bro
   let arrrg = genSym(nskLabel, "arrrg")  # bad news, pal
@@ -177,6 +184,7 @@ proc makeTest(n: NimNode; name: string): Test =
 
 when false:
   proc massageLabel(n: NimNode): NimNode =
+    assert not n.isNil
     case n.kind
     of nnkStrLit:
       result = genSym(nskLabel, $n.strVal)
@@ -189,6 +197,7 @@ when false:
 
 proc rewriteTestBlock(n: NimNode): NimNode =
   ## rewrite test "something": ... as block: ## something ...
+  assert not n.isNil
   result = n
   if n.kind == nnkCommand and len(n) == 3:
     if n[0].kind == nnkIdent and eqIdent(n[0], "test"):
@@ -198,6 +207,7 @@ proc rewriteTestBlock(n: NimNode): NimNode =
 
 proc findName(n: NimNode; index: int): string =
   ## generate a name for a test block
+  assert not n.isNil
   block:
     if len(n) == 2:
       # grab the body of the block,
