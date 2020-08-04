@@ -44,7 +44,7 @@ proc countComments(n: NimNode): int =
   if n.kind == nnkStmtList:
     for _ in items(n):
       if _.kind == nnkCommentStmt:
-        inc result
+        result.inc len(_.strVal.splitLines())
       else:
         break
 
@@ -83,7 +83,12 @@ proc renderTrace(t: Test; e: NimNode = nil): NimNode =
                       newCall(renderStack, getStack)))
 
 proc renderSource(t: Test): NimNode =
-  result = t.output(repr(t.orig).numberLines.prefixLines " 🗏 ")
+  ## strip the first comment, include the remainder
+  var node = copyNimTree(t.orig)
+  if node[0].kind == nnkCommentStmt:
+    let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
+    node[0] = newCommentStmtNode(dropFirst)
+  result = t.output(repr(node).numberLines.prefixLines " 🗏 ")
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let isAtty = bindSym"isAtty"
@@ -137,11 +142,6 @@ proc wrapExcept(t: Test): NimNode =
                                    t.exception(e)))
 
 proc makeTest(n: NimNode; name: string): Test =
-  var name =
-    if len(n) > 0 and n[0].kind == nnkCommentStmt:
-      n[0].strVal
-    else:
-      name
   result = Test(name: name, orig: copyNimTree(n))
   let beuno = genSym(nskLabel, "beuno")  # all good, bro
   let arrrg = genSym(nskLabel, "arrrg")  # bad news, pal
@@ -179,12 +179,30 @@ when false:
 #template test*(x, y: untyped) = test x: y
 
 proc rewriteTestBlock(n: NimNode): NimNode =
+  ## rewrite test "something": ... as block: ## something ...
   result = n
   if n.kind == nnkCommand and len(n) == 3:
     if n[0].kind == nnkIdent and eqIdent(n[0], "test"):
       if n[1].kind == nnkStrLit and n[2].kind == nnkStmtList:
         let name = newCommentStmtNode(n[1].strVal)
         result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(name, n[2]))
+
+proc findName(n: NimNode; index: int): string =
+  ## generate a name for a test block
+  block:
+    if len(n) == 2:
+      echo treeRepr(n.last[0])
+      result = if n.last.kind == nnkStmtList and len(n.last) > 0 and
+        n.last[0].kind == nnkCommentStmt:
+        n.last[0].strVal.splitLines(keepEol = false)[0]
+      elif n[0].kind == nnkEmpty:
+        "test #" & $index
+      elif n[0].kind in {nnkIdent, nnkSym}:
+        n[0].strVal.replace("_", " ")
+      else:
+        "test #" & $index
+      break
+    result = "test #" & $index & " (syntax error)"
 
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
@@ -199,12 +217,9 @@ macro testes*(tests: untyped) =
       if len(blok) < 2 or len(blok.last) == 0:
         test.name = "test #$1 omitted" % [ $index ]
         test.n = test.output("🔵 " & test.name)
-      elif len(blok) == 2 and blok[0].kind == nnkEmpty:
-        test = makeTest(blok.last, "test #" & $index)
-      elif len(blok) == 2 and blok[0].kind != nnkEmpty:
-        test = makeTest(blok.last, blok[0].strVal.replace("_", " "))
       else:
-        raise newException(Defect, "unsupported")
+        let name = findName(blok, index)
+        test = makeTest(blok.last, name)
       result.add test.n
 
 template suite*(title, tests: untyped): untyped =
