@@ -71,12 +71,12 @@ proc findWhere(s: string; p: string; into: var string): bool =
 
 proc renderStack(stack: seq[StackTraceEntry]) =
   var path = getCurrentDir()
-  var cf = "////" # an unlikely filename
+  var cf: string
   var result: seq[string]
   for s in items(stack):
-    if $s.filename != cf:
-      cf = relativePath($s.filename, path)
-      result.add cf
+    if cf != $s.filename:
+      cf = $s.filename
+      result.add relativePath(cf, path)
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
     result.add "$1 $2  # in $3()" % [ line, code, $s.procname ]
