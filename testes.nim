@@ -61,6 +61,11 @@ proc fromFileGetLine(file: string; line: int): string =
   let lines = toSeq lines(file)
   result = lines[line - 1]
 
+proc findWhere(s: string; p: string; into: var string): bool =
+  result = s.count(p) == 1
+  if result:
+    into = spaces(s.find(p))
+
 proc renderStack(stack: seq[StackTraceEntry]) =
   var path = getCurrentDir()
   var cf = "////" # an unlikely filename
@@ -71,7 +76,12 @@ proc renderStack(stack: seq[StackTraceEntry]) =
       result.add cf
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
-    result.add "$1 $2" % [ line, code ]
+    result.add "$1 $2  # in $3()" % [ line, code, $s.procname ]
+    when false:
+      # future substring search
+      var where: string
+      if findWhere(code, sub, where):
+        result.add "$1 $2 ^ (here)" % [ spaces(len(line)), where ]
   report result.join("\n").prefixLines " 🗇 "
 
 proc renderTrace(t: Test; e: NimNode = nil): NimNode =
@@ -125,7 +135,6 @@ proc compilerr(t: Test): NimNode =
   result = newStmtList()
   result.add t.output("⛔ " & t.name & ": compile failed")
   result.add t.renderSource
-  result.add t.renderTrace
   result.add t.setExitCode
 
 proc skip*(msg = "skipped") =

@@ -40,4 +40,5 @@ expandMacros:
       skip()
 
     block broken:
-      doesnt(compile)
+      proc broken() =
+        doesnt(compile)
