@@ -39,7 +39,20 @@ expandMacros:
     block omission:
       skip()
 
-    block:
-      proc broken() =
-        ## this test should be named `broken`
-        doesnt(compile)
+    when defined(release):
+      testes:
+        const compile = true
+        proc doesnt(c: bool) =
+          if not c:
+            raise
+
+        block:
+          proc fixed() = doesnt(compile)
+    else:
+      testes:
+        block:
+          proc broken() = doesnt(compile)
+
+    block assertions:
+      assert 2 == 4 div 2
+      assert 2 != 4 div 2

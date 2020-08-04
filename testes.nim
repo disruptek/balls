@@ -10,7 +10,6 @@ import std/macros
 import cutelog
 
 export sugar, strutils, macros, cutelog
-export unittest except test, skip, check, suite
 
 type
   SkipError = object of CatchableError
@@ -109,11 +108,13 @@ proc setExitCode(t: Test; code = QuitFailure): NimNode =
   result = newIfStmt((prefix(newCall(isAtty, ident"stdin"), "not"),
                       newCall(setResult, code.newLit)))
 
-proc failure(t: Test): NimNode =
+proc failure(t: Test; n: NimNode = nil): NimNode =
   let renderTrace = bindSym"renderTrace"
   result = newStmtList()
   result.add t.output("🔴 " & t.name)
   result.add t.renderSource
+  if not n.isNil:
+    result.add t.renderTrace(n)
   result.add t.setExitCode
 
 proc exceptionString(n: NimNode): NimNode =
@@ -148,11 +149,14 @@ proc skip*(msg = "skipped") =
   report "💣 skipping is broken due to a bug"
 
 proc wrapExcept(t: Test): NimNode =
-  var skip = bindSym"SkipError"
+  var skipping = bindSym"SkipError"
+  var assertion = bindSym"AssertionDefect"
   var e = genSym(nskLet, "e")
   result = nnkTryStmt.newTree(t.n,
-           #nnkExceptBranch.newTree(infix(skip, "as", e),
-           #                        t.skipped(e)),
+           nnkExceptBranch.newTree(infix(skipping, "as", e),
+                                   t.skipped(e)),
+           nnkExceptBranch.newTree(infix(assertion, "as", e),
+                                   t.failure(e)),
            nnkExceptBranch.newTree(infix(ident"Exception", "as", e),
                                    t.exception(e)))
 
@@ -175,12 +179,13 @@ proc makeTest(n: NimNode; name: string): Test =
   result.n = result.wrapExcept
 
   # wrap it into `when compiles(original): test else: compilerr`
-  result.n = nnkWhenStmt.newTree(
-    nnkElifBranch.newTree(
-      newCall(ident"compiles", nnkBlockStmt.newTree(newEmptyNode(),
-                                                    result.orig)),
-      result.n),
-    nnkElse.newTree(result.compilerr))
+  when not defined(release):
+    result.n = nnkWhenStmt.newTree(
+      nnkElifBranch.newTree(
+        newCall(ident"compiles", nnkBlockStmt.newTree(newEmptyNode(),
+                                                      result.orig)),
+        result.n),
+      nnkElse.newTree(result.compilerr))
 
 when false:
   proc massageLabel(n: NimNode): NimNode =
