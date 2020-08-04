@@ -23,4 +23,4 @@ task test, "run tests for travis":
 
 task docs, "generate some docs":
   exec "nim doc --project --outdir=docs testes.nim"
-  exec "termtosvg docs/demo.svg --loop-delay=30000 --screen-geometry=80x45 --template=solarized_dark --command=\"nim cpp -r tests/testicles.nim\""
+  exec "termtosvg docs/demo.svg --loop-delay=30000 --screen-geometry=80x45 --template=solarized_light --command=\"nim cpp -r tests/testicles.nim\""

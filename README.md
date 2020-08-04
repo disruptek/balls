@@ -73,7 +73,7 @@ expandMacros:
         doesnt(compile)
 ```
 
-![demonstration](demo.svg "demonstration")
+![demonstration](docs/demo.svg "demonstration")
 
 ## Documentation
 See [the documentation for the testes module](https://disruptek.github.io/testes/testes.html) as generated directly from the source.
