@@ -1,6 +1,6 @@
 import std/exitprocs
 import std/terminal
-import std/unittest except test, skip, check
+import std/unittest except test, skip, check, suite
 import std/sugar
 import std/strutils
 import std/macros
@@ -8,7 +8,7 @@ import std/macros
 import cutelog
 
 export sugar, strutils, macros, cutelog
-export unittest except check, skip
+export unittest except test, skip, check, suite
 
 type
   SkipError = object of CatchableError
@@ -148,10 +148,19 @@ when false:
     else:
       result = n
 
+proc rewriteTestBlock(n: NimNode): NimNode =
+  result = n
+  if n.kind == nnkCommand and len(n) == 3:
+    if n[0].kind == nnkIdent and eqIdent(n[0], "test"):
+      if n[1].kind == nnkStrLit and n[2].kind == nnkStmtList:
+        let name = newCommentStmtNode(n[1].strVal)
+        result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(name, n[2]))
+
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
   result = newStmtList()
   for index, blok in pairs(tests):
+    var blok = blok.rewriteTestBlock
     if blok.kind != nnkBlockStmt:
       result.add output(repr(blok).indent(1).indent(1, "⚫").newLit)
       result.add blok
@@ -167,6 +176,11 @@ macro testes*(tests: untyped) =
       else:
         raise newException(Defect, "unsupported")
       result.add test.n
+
+template suite*(tests: untyped; title: untyped): untyped =
+  ## suite, suite testes
+  echo "🔵 " & $title
+  result = testes: tests
 
 when isMainModule:
   import std/options

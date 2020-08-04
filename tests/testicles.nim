@@ -2,7 +2,6 @@ import testes
 
 expandMacros:
   testes:
-    echo "welcome to testes"
 
     block goats:
       ## this is a test of goats
@@ -30,6 +29,9 @@ expandMacros:
 
     block:
       discard "unnamed test"
+
+    test "a test: block":
+      discard
 
     block omission:
       skip()
