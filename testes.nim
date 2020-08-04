@@ -1,3 +1,5 @@
+import std/os
+import std/sequtils
 import std/exitprocs
 import std/terminal
 import std/unittest except test, skip, check, suite
@@ -22,8 +24,12 @@ template check*(body: typed) =
     dump body
     break
 
+proc report(ss: varargs[string, `$`]) =
+  writeLine(stderr, ss)
+
 proc output(n: NimNode): NimNode =
-  result = nnkCommand.newTree(ident"echo", n)
+  let report = bindSym"report"
+  result = newCall(report, n)
 
 proc output(t: Test; n: NimNode): NimNode =
   result = output(n)
@@ -34,27 +40,50 @@ proc output(t: Test; s: string): NimNode =
 proc success(t: Test): NimNode =
   result = t.output("🟢 " & t.name)
 
-when false:
-  proc fromFileGetLine(file: cstring; line: int): string =
-    discard
+proc countComments(n: NimNode): int =
+  if n.kind == nnkStmtList:
+    for _ in items(n):
+      if _.kind == nnkCommentStmt:
+        inc result
+      else:
+        break
 
-proc renderTrace(s: NimNode): NimNode =
-  result = newEmptyNode()
+proc prefixLines(s: string; p: string): string =
+  for line in items(splitLines(s, keepEol = true)):
+    result.add p & line
 
-proc renderTrace(t: Test; e: NimNode = nil): NimNode =
-  var call = newCall(ident"getStackTrace")
-  if not e.isNil:
-    call.add e  # get the exception's stacktrace
-  result = newIfStmt((newCall(ident"stackTraceAvailable"),
-                      renderTrace(call)))
-
-proc numberedLines(s: string): string =
+proc numberLines(s: string): string =
   for n, line in pairs(splitLines(s, keepEol = true)):
     if n > 0:
       result.add "$1  $2" % [ align($n, 3), line ]
 
+proc fromFileGetLine(file: string; line: int): string =
+  let lines = toSeq lines(file)
+  result = lines[line - 1]
+
+proc renderStack(stack: seq[StackTraceEntry]) =
+  var path = getCurrentDir()
+  var cf = "////" # an unlikely filename
+  var result: seq[string]
+  for s in items(stack):
+    if $s.filename != cf:
+      cf = relativePath($s.filename, path)
+      result.add cf
+    let code = fromFileGetLine(cf, s.line)
+    let line = align($s.line, 5)
+    result.add "$1 $2" % [ line, code ]
+  report result.join("\n").prefixLines " 🗇 "
+
+proc renderTrace(t: Test; e: NimNode = nil): NimNode =
+  var renderStack = bindSym"renderStack"
+  var getStack = newCall(ident"getStackTraceEntries")
+  if not e.isNil:
+    getStack.add e  # get the exception's stacktrace
+  result = newIfStmt((newCall(ident"stackTraceAvailable"),
+                      newCall(renderStack, getStack)))
+
 proc renderSource(t: Test): NimNode =
-  result = t.output(repr(t.orig).numberedLines)
+  result = t.output(repr(t.orig).numberLines.prefixLines " 🗏 ")
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let isAtty = bindSym"isAtty"
@@ -66,7 +95,6 @@ proc failure(t: Test): NimNode =
   let renderTrace = bindSym"renderTrace"
   result = newStmtList()
   result.add t.output("🔴 " & t.name)
-  result.add t.renderTrace
   result.add t.renderSource
   result.add t.setExitCode
 
@@ -84,20 +112,20 @@ proc exception(t: Test; e: NimNode): NimNode =
   result = newStmtList()
   result.add t.output(infix(newLit("💥 " & t.name & ": "), "&",
                             e.exceptionString))
-  result.add t.renderTrace(e)
   result.add t.renderSource
+  result.add t.renderTrace(e)
   result.add t.setExitCode
 
 proc compilerr(t: Test): NimNode =
   result = newStmtList()
   result.add t.output("⛔ " & t.name & ": compile failed")
-  result.add t.renderTrace
   result.add t.renderSource
+  result.add t.renderTrace
   result.add t.setExitCode
 
 proc skip*(msg = "skipped") =
   #raise newException(SkipError, msg)
-  echo "💣 skipping is broken due to a bug"
+  report "💣 skipping is broken due to a bug"
 
 proc wrapExcept(t: Test): NimNode =
   var skip = bindSym"SkipError"
@@ -148,6 +176,8 @@ when false:
     else:
       result = n
 
+#template test*(x, y: untyped) = test x: y
+
 proc rewriteTestBlock(n: NimNode): NimNode =
   result = n
   if n.kind == nnkCommand and len(n) == 3:
@@ -162,7 +192,7 @@ macro testes*(tests: untyped) =
   for index, blok in pairs(tests):
     var blok = blok.rewriteTestBlock
     if blok.kind != nnkBlockStmt:
-      result.add output(repr(blok).indent(1).indent(1, "⚫").newLit)
+      result.add output(repr(blok).prefixLines("⚫ ").newLit)
       result.add blok
     else:
       var test: Test
@@ -177,9 +207,9 @@ macro testes*(tests: untyped) =
         raise newException(Defect, "unsupported")
       result.add test.n
 
-template suite*(tests: untyped; title: untyped): untyped =
+template suite*(title, tests: untyped): untyped =
   ## suite, suite testes
-  echo "🔵 " & $title
+  report "🔵 " & $title
   result = testes: tests
 
 when isMainModule:
