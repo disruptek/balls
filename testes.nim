@@ -200,35 +200,43 @@ proc findName(n: NimNode; index: int): string =
   ## generate a name for a test block
   block:
     if len(n) == 2:
-      echo treeRepr(n.last[0])
-      result = if n.last.kind == nnkStmtList and len(n.last) > 0 and
-        n.last[0].kind == nnkCommentStmt:
-        n.last[0].strVal.splitLines(keepEol = false)[0]
-      elif n[0].kind == nnkEmpty:
-        "test #" & $index
+      # grab the body of the block,
+      var body = n.last
+      # and the first node
+      var head = if len(body) > 0: body[0] else: newEmptyNode()
+      # pick the best of these,
+      result = if body.kind == nnkStmtList and head.kind == nnkCommentStmt:
+        head.strVal.splitLines(keepEol = false)[0]
       elif n[0].kind in {nnkIdent, nnkSym}:
         n[0].strVal.replace("_", " ")
+      elif body.kind == nnkStmtList and head.kind in RoutineNodes:
+        head.name.strVal.replace("_", " ")
+      elif n[0].kind == nnkEmpty:
+        "test #" & $index
       else:
         "test #" & $index
+      # and we're done.
       break
-    result = "test #" & $index & " (syntax error)"
+    # else we had some kind of parse error
+    echo treeRepr(n)
+    result = "test #" & $index & " (parse error)"
 
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
   result = newStmtList()
-  for index, blok in pairs(tests):
-    var blok = blok.rewriteTestBlock
-    if blok.kind != nnkBlockStmt:
-      result.add output(repr(blok).prefixLines("⚫ ").newLit)
-      result.add blok
+  for index, n in pairs(tests):
+    var n = n.rewriteTestBlock
+    if n.kind != nnkBlockStmt:
+      result.add output(repr(n).prefixLines("⚫ ").newLit)
+      result.add n
     else:
       var test: Test
-      if len(blok) < 2 or len(blok.last) == 0:
+      if len(n) < 2 or len(n.last) == 0:
         test.name = "test #$1 omitted" % [ $index ]
         test.n = test.output("🔵 " & test.name)
       else:
-        let name = findName(blok, index)
-        test = makeTest(blok.last, name)
+        let name = findName(n, index)
+        test = makeTest(n.last, name)
       result.add test.n
 
 template suite*(title, tests: untyped): untyped =

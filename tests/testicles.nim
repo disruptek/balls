@@ -39,6 +39,7 @@ expandMacros:
     block omission:
       skip()
 
-    block broken:
+    block:
       proc broken() =
+        ## this test should be named `broken`
         doesnt(compile)
