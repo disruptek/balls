@@ -5,14 +5,16 @@ expandMacros:
 
     block goats:
       ## this is a test of goats
+      discard
 
     block pigs:
       ## a test of pigs
+      discard
 
     var r = 3
 
     block sometimes_the_wolf_is_nice:
-      break
+      assert true
       inc r
 
     block sheepies:
@@ -33,7 +35,7 @@ expandMacros:
     block:
       discard "unnamed test"
 
-    test "a test: block":
+    test "a test: block is fine":
       discard
 
     block omission:
@@ -56,3 +58,5 @@ expandMacros:
     block assertions:
       assert 2 == 4 div 2
       assert 2 != 4 div 2
+
+    assert "any statement is a test" != ""

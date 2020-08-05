@@ -160,18 +160,22 @@ proc wrapExcept(t: Test): NimNode =
 
 proc makeTest(n: NimNode; name: string): Test =
   assert not n.isNil
-  result = Test(name: name, orig: copyNimTree(n))
+  result = Test(name: name, orig: n)
   let beuno = genSym(nskLabel, "beuno")  # all good, bro
   let arrrg = genSym(nskLabel, "arrrg")  # bad news, pal
 
-  # emit a success if we exited the block normally
-  n.add result.success
-  n.add nnkBreakStmt.newTree(arrrg)
-  result.n = nnkBlockStmt.newTree(beuno, n)
+  result.n = copyNimTree(n).newStmtList
+  result.n.add result.success
 
-  # emit a failure if we broke out of the success block
-  result.n = nnkBlockStmt.newTree(arrrg,
-                                  newStmtList(result.n, result.failure))
+  when false:
+    # emit a success if we exited the block normally
+    n.add result.success
+    n.add nnkBreakStmt.newTree(arrrg)
+    result.n = nnkBlockStmt.newTree(beuno, n)
+
+    # emit a failure if we broke out of the success block
+    result.n = nnkBlockStmt.newTree(arrrg,
+                                    newStmtList(result.n, result.failure))
 
   # wrap it to catch any exceptions
   result.n = result.wrapExcept
@@ -180,8 +184,9 @@ proc makeTest(n: NimNode; name: string): Test =
   when not defined(release):
     result.n = nnkWhenStmt.newTree(
       nnkElifBranch.newTree(
-        newCall(ident"compiles", nnkBlockStmt.newTree(newEmptyNode(),
-                                                      result.orig)),
+        newCall(ident"compiles",
+                nnkBlockStmt.newTree(genSym(nskLabel, "compiles"),
+                                     newStmtList(result.orig))),
         result.n),
       nnkElse.newTree(result.compilerr))
 
@@ -217,7 +222,7 @@ proc findName(n: NimNode; index: int): string =
   ## generate a name for a test block
   assert not n.isNil
   block:
-    if len(n) == 2:
+    if len(n) == 2 and n.kind == nnkBlockStmt:
       # grab the body of the block,
       var body = n.last
       # and the first node
@@ -235,6 +240,9 @@ proc findName(n: NimNode; index: int): string =
         "test #" & $index & " " & shortenRepr(n)
       # and we're done.
       break
+    else:
+      result = shortenRepr(n)
+      break
     # else we had some kind of parse error
     echo treeRepr(n)
     result = "test #" & $index & " (parse error)"
@@ -249,7 +257,8 @@ const
     nnkBreakStmt, nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt,
     nnkExportStmt, nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt,
     nnkTypeSection, nnkMixinStmt, nnkBindStmt, nnkProcDef, nnkIteratorDef,
-    nnkConverterDef, nnkTemplateDef, nnkFuncDef, nnkMacroDef
+    nnkConverterDef, nnkTemplateDef, nnkFuncDef, nnkMacroDef, nnkCommand,
+    nnkCall
 
   }
 
@@ -259,7 +268,8 @@ const
     nnkBlockStmt, nnkIfStmt, nnkWhileStmt, nnkForStmt, nnkTryStmt,
     nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkContinueStmt,
     nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt, nnkExportStmt,
-    nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt
+    nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt, nnkCommand,
+    nnkCall, nnkWhenStmt
 
   }
 
@@ -268,18 +278,18 @@ macro testes*(tests: untyped) =
   result = newStmtList()
   for index, n in pairs(tests):
     var n = n.rewriteTestBlock
-    if n.kind notin testable:
-      result.add output(repr(n).prefixLines("⚫ ").newLit)
-      result.add n
-    else:
+    if n.kind in testable:
       var test: Test
-      if len(n) < 2 or len(n.last) == 0:
+      if false and len(n) < 2 or len(n.last) == 0:
         test.name = "test #$1 omitted" % [ $index ]
         test.n = test.output("🔵 " & test.name)
       else:
         let name = findName(n, index)
         test = makeTest(n, name)
       result.add test.n
+    else:
+      result.add output(repr(n).prefixLines("⚫ ").newLit)
+      result.add n
 
 template suite*(title, tests: untyped): untyped =
   ## suite, suite testes
