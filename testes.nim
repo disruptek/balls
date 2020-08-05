@@ -145,20 +145,18 @@ proc compilerr(t: Test): NimNode =
   result.add t.setExitCode
 
 proc skip*(msg = "skipped") =
-  #raise newException(SkipError, msg)
-  report "💣 skipping is broken due to a bug"
+  report "💣 skipping is broken on C (not C++) backend due to a bug"
+  raise newException(SkipError, msg)
 
 proc wrapExcept(t: Test): NimNode =
   var skipping = bindSym"SkipError"
   var assertion = bindSym"AssertionDefect"
+  var catchall = bindSym"Exception"
   var e = genSym(nskLet, "e")
   result = nnkTryStmt.newTree(t.n,
-           nnkExceptBranch.newTree(infix(skipping, "as", e),
-                                   t.skipped(e)),
-           nnkExceptBranch.newTree(infix(assertion, "as", e),
-                                   t.failure(e)),
-           nnkExceptBranch.newTree(infix(ident"Exception", "as", e),
-                                   t.exception(e)))
+           nnkExceptBranch.newTree(infix(skipping, "as", e), t.skipped(e)),
+           nnkExceptBranch.newTree(infix(assertion, "as", e), t.failure(e)),
+           nnkExceptBranch.newTree(infix(catchall, "as", e), t.exception(e)))
 
 proc makeTest(n: NimNode; name: string): Test =
   assert not n.isNil
@@ -197,8 +195,6 @@ when false:
       result = genSym(nskLabel, $n.intVal)
     else:
       result = n
-
-#template test*(x, y: untyped) = test x: y
 
 proc rewriteTestBlock(n: NimNode): NimNode =
   ## rewrite test "something": ... as block: ## something ...

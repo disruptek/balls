@@ -1,4 +1,4 @@
-version = "0.1.0"
+version = "0.1.1"
 author = "disruptek"
 description = "a cure for salty testes"
 license = "MIT"
@@ -8,7 +8,7 @@ requires "bump >= 1.8.18 & < 2.0.0"
 #requires "https://github.com/disruptek/badresults < 2.0.0"
 requires "https://github.com/disruptek/cutelog >= 1.1.0 & < 2.0.0"
 
-backend = "c"
+backend = "cpp"
 
 proc execCmd(cmd: string) =
   echo "execCmd:" & cmd
@@ -23,4 +23,4 @@ task test, "run tests for travis":
 
 task docs, "generate some docs":
   exec "nim doc --project --outdir=docs testes.nim"
-  exec "termtosvg docs/demo.svg --loop-delay=10000 --screen-geometry=80x60 --template=solarized_light --command=\"nim cpp -r tests/testicles.nim\""
+  exec "termtosvg docs/demo.svg --loop-delay=10000 --screen-geometry=80x60 --template=window_frame_powershell --command=\"nim cpp -r tests/testicles.nim\""
