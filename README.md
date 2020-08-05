@@ -15,7 +15,6 @@ Because `testament` and `testutils` are going nowhere fast.
 - easily accumulate state between tests when desired
 - when attached to a tty, errors are not fatal
 - individual tests don't even have to compile
-- replaces and enhances unittest at the same time
 - easier test reordering, built-in timing, mem stats
 - smaller, more self-evident testing macro
 
