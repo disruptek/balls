@@ -60,7 +60,7 @@ type
 template check*(body: typed) =
   if not body:
     dump body
-    break
+    raise newException(AssertionDefect, "check failed")
 
 proc `status=`(t: var Test; s: StatusKind) =
   system.`=`(t.status, max(t.status, s))
@@ -143,9 +143,10 @@ proc renderTrace(t: Test; n: NimNode = nil): NimNode =
 proc renderSource(t: Test): NimNode =
   ## strip the first comment, include the remainder
   var node = copyNimTree(t.orig)
-  if node[0].kind == nnkCommentStmt:
-    let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
-    node[0] = newCommentStmtNode(dropFirst)
+  if len(node) > 0:
+    if node[0].kind == nnkCommentStmt:
+      let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
+      node[0] = newCommentStmtNode(dropFirst)
   result = t.output(repr(node).numberLines.prefixLines " 🗏 ")
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
@@ -311,22 +312,12 @@ macro testes*(tests: untyped) =
     for index, n in pairs(tests):
       var n = n.rewriteTestBlock
       var test: Test
-      if true or n.kind in testable:
-        if false and (len(n) < 2 or len(n.last) == 0):
-          #test.name = "test #$1 omitted" % [ $index ]
-          test.name = repr(n)
-          test.status = Info
-          test.n = test.output(test.name)
-        else:
-          let name = findName(n, index)
-          test = makeTest(n, name)
-        result.add test.n
+      if n.kind == nnkCommentStmt:
+        result.add output(newLit(n.strVal.prefixLines($Info & " ")))
       else:
-        test.name = repr(n)
-        test.n = n
-        test.status = None
-        result.add test.output(test.name)
-        result.add n
+        let name = findName(n, index)
+        test = makeTest(n, name)
+        result.add test.n
   finally:
     dec depth
 
