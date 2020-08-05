@@ -239,12 +239,36 @@ proc findName(n: NimNode; index: int): string =
     echo treeRepr(n)
     result = "test #" & $index & " (parse error)"
 
+const
+  statements = {
+    # these are not r-values
+
+    nnkBlockStmt, nnkStmtList, nnkIfStmt, nnkWhileStmt, nnkVarSection,
+    nnkLetSection, nnkConstSection, nnkWhenStmt, nnkForStmt, nnkTryStmt,
+    nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkContinueStmt,
+    nnkBreakStmt, nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt,
+    nnkExportStmt, nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt,
+    nnkTypeSection, nnkMixinStmt, nnkBindStmt, nnkProcDef, nnkIteratorDef,
+    nnkConverterDef, nnkTemplateDef, nnkFuncDef, nnkMacroDef
+
+  }
+
+  testable = {
+    # these are safe to wrap individually
+
+    nnkBlockStmt, nnkIfStmt, nnkWhileStmt, nnkForStmt, nnkTryStmt,
+    nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkContinueStmt,
+    nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt, nnkExportStmt,
+    nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt
+
+  }
+
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
   result = newStmtList()
   for index, n in pairs(tests):
     var n = n.rewriteTestBlock
-    if n.kind != nnkBlockStmt:
+    if n.kind notin testable:
       result.add output(repr(n).prefixLines("⚫ ").newLit)
       result.add n
     else:
@@ -254,7 +278,7 @@ macro testes*(tests: untyped) =
         test.n = test.output("🔵 " & test.name)
       else:
         let name = findName(n, index)
-        test = makeTest(n.last, name)
+        test = makeTest(n, name)
       result.add test.n
 
 template suite*(title, tests: untyped): untyped =
