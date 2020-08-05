@@ -63,25 +63,32 @@ expandMacros:
     block:
       discard "unnamed test"
 
+    inc r
+    assert r > 0
+    type TypesAreNotTests = bool
+    const VariablesDefinedOutsideBlocksAreNotTests = true
+
     test "a test: block is fine":
       discard
 
     block omission:
       skip()
 
-    when defined(release):
-      testes:
-        const compile = true
-        proc doesnt(c: bool) =
-          if not c:
-            raise
+    block:
+      ## hide this gory when statement
+      when defined(release):
+        testes:
+          const compile = true
+          proc doesnt(c: bool) =
+            if not c:
+              raise
 
-        block:
-          proc fixed() = doesnt(compile)
-    else:
-      testes:
-        block:
-          proc broken() = doesnt(compile)
+          block:
+            proc fixed() = doesnt(compile)
+      else:
+        testes:
+          block:
+            proc broken() = doesnt(compile)
 
     block assertions:
       assert 2 == 4 div 2
