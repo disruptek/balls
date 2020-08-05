@@ -2,7 +2,6 @@ import std/os
 import std/sequtils
 import std/exitprocs
 import std/terminal
-import std/unittest except test, skip, check, suite
 import std/sugar
 import std/strutils
 import std/macros
@@ -11,9 +10,23 @@ import cutelog
 
 export sugar, strutils, macros, cutelog
 
+var
+  depth {.compileTime.}: int
+
 type
   SkipError = object of CatchableError
+  StatusKind = enum
+    None = "⚫"
+    Info = "🔵"
+    Okay = "🟢"
+    Skip = "❔"
+    Part = "🟡"
+    Fail = "🔴"
+    Died = "💥"
+    Oops = "⛔"
+
   Test = object
+    status: StatusKind
     orig: NimNode
     n: NimNode
     name: string
@@ -23,32 +36,8 @@ template check*(body: typed) =
     dump body
     break
 
-proc report(ss: varargs[string, `$`]) =
-  writeLine(stderr, ss)
-
-proc output(n: NimNode): NimNode =
-  assert not n.isNil
-  let report = bindSym"report"
-  result = newCall(report, n)
-
-proc output(t: Test; n: NimNode): NimNode =
-  assert not n.isNil
-  result = output(n)
-
-proc output(t: Test; s: string): NimNode =
-  result = t.output s.newLit
-
-proc success(t: Test): NimNode =
-  result = t.output("🟢 " & t.name)
-
-proc countComments(n: NimNode): int =
-  assert not n.isNil
-  if n.kind == nnkStmtList:
-    for _ in items(n):
-      if _.kind == nnkCommentStmt:
-        result.inc len(_.strVal.splitLines())
-      else:
-        break
+proc `status=`(t: var Test; s: StatusKind) =
+  system.`=`(t.status, max(t.status, s))
 
 proc prefixLines(s: string; p: string): string =
   for line in items(splitLines(s, keepEol = true)):
@@ -59,6 +48,37 @@ proc numberLines(s: string): string =
     if n > 0:
       result.add "$1  $2" % [ align($n, 3), line ]
 
+proc report(ss: varargs[string, `$`]) =
+  writeLine(stderr, ss)
+
+proc output(n: NimNode): NimNode {.deprecated.} =
+  assert not n.isNil
+  let report = bindSym"report"
+  result = newCall(report, n)
+
+proc output(t: Test; n: NimNode): NimNode =
+  assert not n.isNil
+  let prefixer = bindSym"prefixLines"
+  result = output(newCall(prefixer,
+                          newCall(ident"$", n),
+                          newLit($t.status & " ")))
+
+proc output(t: Test; s: string): NimNode =
+  result = t.output s.newLit
+
+proc success(t: var Test): NimNode =
+  t.status = Okay
+  result = t.output(t.name)
+
+proc countComments(n: NimNode): int =
+  assert not n.isNil
+  if n.kind == nnkStmtList:
+    for _ in items(n):
+      if _.kind == nnkCommentStmt:
+        result.inc len(_.strVal.splitLines())
+      else:
+        break
+
 proc fromFileGetLine(file: string; line: int): string =
   let lines = toSeq lines(file)
   result = lines[line - 1]
@@ -68,7 +88,7 @@ proc findWhere(s: string; p: string; into: var string): bool =
   if result:
     into = spaces(s.find(p))
 
-proc renderStack(stack: seq[StackTraceEntry]) =
+proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
   var path = getCurrentDir()
   var cf: string
   var result: seq[string]
@@ -84,7 +104,7 @@ proc renderStack(stack: seq[StackTraceEntry]) =
       var where: string
       if findWhere(code, sub, where):
         result.add "$1 $2 ^ (here)" % [ spaces(len(line)), where ]
-  report result.join("\n").prefixLines " 🗇 "
+  report result.join("\n").prefixLines prefix & " 🗇 "
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
   var renderStack = bindSym"renderStack"
@@ -92,7 +112,7 @@ proc renderTrace(t: Test; n: NimNode = nil): NimNode =
   if not n.isNil:
     getStack.add n  # get the exception's stacktrace
   result = newIfStmt((newCall(ident"stackTraceAvailable"),
-                      newCall(renderStack, getStack)))
+                      newCall(renderStack, newLit($t.status), getStack)))
 
 proc renderSource(t: Test): NimNode =
   ## strip the first comment, include the remainder
@@ -108,13 +128,22 @@ proc setExitCode(t: Test; code = QuitFailure): NimNode =
   result = newIfStmt((prefix(newCall(isAtty, ident"stdin"), "not"),
                       newCall(setResult, code.newLit)))
 
-proc failure(t: Test; n: NimNode = nil): NimNode =
-  let renderTrace = bindSym"renderTrace"
+proc failure(t: var Test; n: NimNode = nil): NimNode =
+  t.status = Fail
   result = newStmtList()
-  result.add t.output("🔴 " & t.name)
+  result.add t.output(t.name)
   result.add t.renderSource
+  {.warning: "due to nim bug #15160, we have to leave this in!".}
   if not n.isNil:
     result.add t.renderTrace(n)
+  result.add t.setExitCode
+
+proc badassert(t: var Test; n: NimNode = nil): NimNode =
+  ## like failure(), but don't render the stack trace
+  t.status = Fail
+  result = newStmtList()
+  result.add t.output(t.name)
+  result.add t.renderSource
   result.add t.setExitCode
 
 proc exceptionString(n: NimNode): NimNode =
@@ -129,18 +158,20 @@ proc skipped(t: Test; n: NimNode): NimNode =
   result.add t.output(infix(newLit("⚪ " & t.name & ": "), "&",
                             n.exceptionString))
 
-proc exception(t: Test; n: NimNode): NimNode =
+proc exception(t: var Test; n: NimNode): NimNode =
   assert not n.isNil
+  t.status = Died
   result = newStmtList()
-  result.add t.output(infix(newLit("💥 " & t.name & ": "), "&",
+  result.add t.output(infix(newLit(t.name & ": "), "&",
                             n.exceptionString))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
 
-proc compilerr(t: Test): NimNode =
+proc compilerr(t: var Test): NimNode =
+  t.status = Oops
   result = newStmtList()
-  result.add t.output("⛔ " & t.name & ": compile failed")
+  result.add t.output(t.name & ": compile failed")
   result.add t.renderSource
   result.add t.setExitCode
 
@@ -148,7 +179,7 @@ proc skip*(msg = "skipped") =
   report "💣 skipping is broken on C (not C++) backend due to a bug"
   raise newException(SkipError, msg)
 
-proc wrapExcept(t: Test): NimNode =
+proc wrapExcept(t: var Test): NimNode =
   var skipping = bindSym"SkipError"
   var assertion = bindSym"AssertionDefect"
   var catchall = bindSym"Exception"
@@ -221,31 +252,22 @@ proc shortenRepr(n: NimNode): string =
 proc findName(n: NimNode; index: int): string =
   ## generate a name for a test block
   assert not n.isNil
-  block:
-    if len(n) == 2 and n.kind == nnkBlockStmt:
-      # grab the body of the block,
-      var body = n.last
-      # and the first node
-      var head = if len(body) > 0: body[0] else: newEmptyNode()
-      # pick the best of these,
-      result = if body.kind == nnkStmtList and head.kind == nnkCommentStmt:
-        head.strVal.splitLines(keepEol = false)[0]
-      elif n[0].kind in {nnkIdent, nnkSym}:
-        n[0].strVal.replace("_", " ")
-      elif body.kind == nnkStmtList and head.kind in RoutineNodes:
-        head.name.strVal.replace("_", " ")
-      elif n[0].kind == nnkEmpty:
-        "test #" & $index & " " & shortenRepr(n)
-      else:
-        "test #" & $index & " " & shortenRepr(n)
-      # and we're done.
-      break
+  if len(n) == 2 and n.kind == nnkBlockStmt:
+    # grab the body of the block,
+    var body = n.last
+    # and the first node
+    var head = if len(body) > 0: body[0] else: newEmptyNode()
+    # pick the best of these,
+    result = if body.kind == nnkStmtList and head.kind == nnkCommentStmt:
+      head.strVal.splitLines(keepEol = false)[0]
+    elif n[0].kind in {nnkIdent, nnkSym}:
+      n[0].strVal.replace("_", " ")
+    elif body.kind == nnkStmtList and head.kind in RoutineNodes:
+      head.name.strVal.replace("_", " ")
     else:
-      result = shortenRepr(n)
-      break
-    # else we had some kind of parse error
-    echo treeRepr(n)
-    result = "test #" & $index & " (parse error)"
+      repr(n)
+  else:
+    result = repr(n)
 
 const
   statements = {
@@ -275,21 +297,30 @@ const
 
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
-  result = newStmtList()
-  for index, n in pairs(tests):
-    var n = n.rewriteTestBlock
-    if n.kind in testable:
+  inc depth
+  try:
+    result = newStmtList()
+    for index, n in pairs(tests):
+      var n = n.rewriteTestBlock
       var test: Test
-      if false and len(n) < 2 or len(n.last) == 0:
-        test.name = "test #$1 omitted" % [ $index ]
-        test.n = test.output("🔵 " & test.name)
+      if n.kind in testable:
+        if false and (len(n) < 2 or len(n.last) == 0):
+          #test.name = "test #$1 omitted" % [ $index ]
+          test.name = repr(n)
+          test.status = Info
+          test.n = test.output(test.name)
+        else:
+          let name = findName(n, index)
+          test = makeTest(n, name)
+        result.add test.n
       else:
-        let name = findName(n, index)
-        test = makeTest(n, name)
-      result.add test.n
-    else:
-      result.add output(repr(n).prefixLines("⚫ ").newLit)
-      result.add n
+        test.name = repr(n)
+        test.n = n
+        test.status = None
+        result.add test.output(test.name)
+        result.add n
+  finally:
+    dec depth
 
 template suite*(title, tests: untyped): untyped =
   ## suite, suite testes
