@@ -206,6 +206,13 @@ proc rewriteTestBlock(n: NimNode): NimNode =
         let name = newCommentStmtNode(n[1].strVal)
         result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(name, n[2]))
 
+proc shortenRepr(n: NimNode): string =
+  let splat = repr(n).splitLines
+  if len(splat) == 1:
+    result = splat[0]
+  else:
+    result = splat[0] & " ⮠..."
+
 proc findName(n: NimNode; index: int): string =
   ## generate a name for a test block
   assert not n.isNil
@@ -223,9 +230,9 @@ proc findName(n: NimNode; index: int): string =
       elif body.kind == nnkStmtList and head.kind in RoutineNodes:
         head.name.strVal.replace("_", " ")
       elif n[0].kind == nnkEmpty:
-        "test #" & $index
+        "test #" & $index & " " & shortenRepr(n)
       else:
-        "test #" & $index
+        "test #" & $index & " " & shortenRepr(n)
       # and we're done.
       break
     # else we had some kind of parse error
