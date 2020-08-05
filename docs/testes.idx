@@ -1,4 +1,3 @@
 check	testes.html#check.t,typed	testes: check(body: typed)	
 skip	testes.html#skip,string	testes: skip(msg = &quot;skipped&quot;)	
 testes	testes.html#testes.m,untyped	testes: testes(tests: untyped)	
-suite	testes.html#suite.t,untyped,untyped	testes: suite(title, tests: untyped): untyped	

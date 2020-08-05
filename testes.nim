@@ -10,6 +10,32 @@ import cutelog
 
 export sugar, strutils, macros, cutelog
 
+const
+  statements = {
+    # these are not r-values
+
+    nnkBlockStmt, nnkStmtList, nnkIfStmt, nnkWhileStmt, nnkVarSection,
+    nnkLetSection, nnkConstSection, nnkWhenStmt, nnkForStmt, nnkTryStmt,
+    nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkContinueStmt,
+    nnkBreakStmt, nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt,
+    nnkExportStmt, nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt,
+    nnkTypeSection, nnkMixinStmt, nnkBindStmt, nnkProcDef, nnkIteratorDef,
+    nnkConverterDef, nnkTemplateDef, nnkFuncDef, nnkMacroDef, nnkCommand,
+    nnkCall
+
+  }
+
+  testable = {
+    # these are safe to wrap individually inside a try/except block
+
+    nnkBlockStmt, nnkIfStmt, nnkWhileStmt, nnkForStmt, nnkTryStmt,
+    nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkContinueStmt,
+    nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt, nnkExportStmt,
+    nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt, nnkCommand,
+    nnkCall, nnkWhenStmt
+
+  }
+
 var
   depth {.compileTime.}: int
 
@@ -196,20 +222,28 @@ proc makeTest(n: NimNode; name: string): Test =
   let arrrg = genSym(nskLabel, "arrrg")  # bad news, pal
 
   result.n = copyNimTree(n).newStmtList
-  result.n.add result.success
 
-  when false:
-    # emit a success if we exited the block normally
-    n.add result.success
-    n.add nnkBreakStmt.newTree(arrrg)
-    result.n = nnkBlockStmt.newTree(beuno, n)
+  if n.kind in testable:
+    result.n.add result.success
 
-    # emit a failure if we broke out of the success block
-    result.n = nnkBlockStmt.newTree(arrrg,
-                                    newStmtList(result.n, result.failure))
+    when false:
+      # emit a success if we exited the block normally
+      n.add result.success
+      n.add nnkBreakStmt.newTree(arrrg)
+      result.n = nnkBlockStmt.newTree(beuno, n)
 
-  # wrap it to catch any exceptions
-  result.n = result.wrapExcept
+      # emit a failure if we broke out of the success block
+      result.n = nnkBlockStmt.newTree(arrrg,
+                                      newStmtList(result.n, result.failure))
+
+    # wrap it to catch any exceptions
+    result.n = result.wrapExcept
+  else:
+    # it's not testable; we'll indicate that it worked (what else?)
+    when defined(release):
+      result.status = Okay
+    # output the status in any event; otherwise there will be no output
+    result.n.add result.output(result.name)
 
   # wrap it into `when compiles(original): test else: compilerr`
   when not defined(release):
@@ -269,32 +303,6 @@ proc findName(n: NimNode; index: int): string =
   else:
     result = repr(n)
 
-const
-  statements = {
-    # these are not r-values
-
-    nnkBlockStmt, nnkStmtList, nnkIfStmt, nnkWhileStmt, nnkVarSection,
-    nnkLetSection, nnkConstSection, nnkWhenStmt, nnkForStmt, nnkTryStmt,
-    nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkContinueStmt,
-    nnkBreakStmt, nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt,
-    nnkExportStmt, nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt,
-    nnkTypeSection, nnkMixinStmt, nnkBindStmt, nnkProcDef, nnkIteratorDef,
-    nnkConverterDef, nnkTemplateDef, nnkFuncDef, nnkMacroDef, nnkCommand,
-    nnkCall
-
-  }
-
-  testable = {
-    # these are safe to wrap individually
-
-    nnkBlockStmt, nnkIfStmt, nnkWhileStmt, nnkForStmt, nnkTryStmt,
-    nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkContinueStmt,
-    nnkAsmStmt, nnkImportStmt, nnkImportExceptStmt, nnkExportStmt,
-    nnkExportExceptStmt, nnkFromStmt, nnkIncludeStmt, nnkCommand,
-    nnkCall, nnkWhenStmt
-
-  }
-
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
   inc depth
@@ -303,7 +311,7 @@ macro testes*(tests: untyped) =
     for index, n in pairs(tests):
       var n = n.rewriteTestBlock
       var test: Test
-      if n.kind in testable:
+      if true or n.kind in testable:
         if false and (len(n) < 2 or len(n.last) == 0):
           #test.name = "test #$1 omitted" % [ $index ]
           test.name = repr(n)
@@ -321,11 +329,6 @@ macro testes*(tests: untyped) =
         result.add n
   finally:
     dec depth
-
-template suite*(title, tests: untyped): untyped =
-  ## suite, suite testes
-  report "🔵 " & $title
-  result = testes: tests
 
 when isMainModule:
   import std/options
