@@ -37,7 +37,9 @@ expandMacros:
 
     inc r
     assert r > 0
+    ## this is a nice comment
     type TypesAreNotTests = bool
+    ## there's really nothing else to say
     const VariablesDefinedOutsideBlocksAreNotTests = true
 
     test "a test: block is fine":
