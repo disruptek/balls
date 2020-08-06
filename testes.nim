@@ -5,6 +5,8 @@ import std/terminal
 import std/sugar
 import std/strutils
 import std/macros
+import std/compilesettings
+
 
 import cutelog
 
@@ -183,7 +185,7 @@ proc skipped(t: Test; n: NimNode): NimNode =
   assert not n.isNil
   result = newStmtList()
   result.add t.output(infix(newLit("⚪ " & t.name & ": "), "&",
-                            n.exceptionString))
+                            newDotExpr(n, ident"msg")))
 
 proc exception(t: var Test; n: NimNode): NimNode =
   assert not n.isNil
@@ -203,7 +205,8 @@ proc compilerr(t: var Test): NimNode =
   result.add t.setExitCode
 
 proc skip*(msg = "skipped") =
-  report "💣 skipping is broken on C (not C++) backend due to a bug"
+  when querySetting(command) == "c":
+    report "💣 skipping is broken on C (not C++) backend due to a bug"
   raise newException(SkipError, msg)
 
 proc wrapExcept(t: var Test): NimNode =

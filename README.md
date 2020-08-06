@@ -8,7 +8,8 @@ Because `testament` and `testutils` are going nowhere fast.
 
 ## Goals
 
-- we expect everything to work; any statement is a test
+- expect everything to work; any statement is a test
+- show the test code as we run it, unless not :wink:
 - better stack traces and test source output
 - less magical syntax and less output omission
 - aim to run many cheap tests in fewer files
@@ -20,8 +21,7 @@ Because `testament` and `testutils` are going nowhere fast.
 
 ## Notable Mentions
 
-- With `--define:release`, your tests must compile.
-- `check` doesn't work inside other scopes due to a bug.
+- With `--define:release`, _all code_ **must** compile.
 
 ## Usage
 

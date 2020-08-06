@@ -1,3 +1,6 @@
+import std/os
+import std/exitprocs
+
 import testes
 
 expandMacros:
@@ -69,3 +72,6 @@ expandMacros:
       assert 2 != 4 div 2
 
     assert "any statement is a test" != ""
+
+if getEnv("TRAVIS_COMPILER", "unlikely") != "unlikely":
+  setProgramResult QuitSuccess
