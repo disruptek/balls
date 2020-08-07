@@ -71,10 +71,9 @@ proc prefixLines(s: string; p: string): string =
   for line in items(splitLines(s, keepEol = true)):
     result.add p & line
 
-proc numberLines(s: string): string =
+proc numberLines(s: string; first = 1): string =
   for n, line in pairs(splitLines(s, keepEol = true)):
-    if n > 0:
-      result.add "$1  $2" % [ align($n, 3), line ]
+    result.add "$1  $2" % [ align($(n + first), 3), line ]
 
 proc report(ss: varargs[string, `$`]) =
   writeLine(stderr, ss)
@@ -145,11 +144,12 @@ proc renderTrace(t: Test; n: NimNode = nil): NimNode =
 proc renderSource(t: Test): NimNode =
   ## strip the first comment, include the remainder
   var node = copyNimTree(t.orig)
+  var info = lineInfoObj(t.orig)
   if len(node) > 0:
     if node[0].kind == nnkCommentStmt:
       let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
       node[0] = newCommentStmtNode(dropFirst)
-  result = t.output(repr(node).numberLines.prefixLines " 🗏 ")
+  result = t.output(repr(node).numberLines(info.line).prefixLines " 🗏 ")
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let isAtty = bindSym"isAtty"
