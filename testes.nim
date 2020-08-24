@@ -6,7 +6,7 @@ import std/sugar
 import std/strutils
 import std/macros
 import std/compilesettings
-
+import std/colors
 
 import cutelog
 
@@ -59,6 +59,34 @@ type
     n: NimNode
     name: string
 
+const
+  commentStyle = ansiResetCode &
+                 ansiStyleCode(styleItalic) &
+                 ansiForegroundColorCode(fgWhite, true)
+  lineNumStyle = ansiResetCode &
+                 ansiStyleCode(styleItalic) &
+                 ansiForegroundColorCode(fgBlack, true)
+  successStyle = ansiResetCode &
+                 ansiForegroundColorCode(fgGreen)
+  oopsStyle = ansiResetCode &
+              ansiStyleCode(styleBright) &
+              ansiStyleCode(styleReverse) &
+              ansiBackgroundColorCode(Color(0xFFFFFF)) &
+              ansiForegroundColorCode(fgRed, true)
+  failureStyle = ansiResetCode &
+                 ansiForegroundColorCode(fgRed)
+  exceptionStyle = ansiResetCode &
+                   ansiForegroundColorCode(fgRed, true)
+  sourceStyle = ansiResetCode &
+                ansiForegroundColorCode(fgDefault)
+  viaProcStyle = ansiResetCode &
+                 ansiStyleCode(styleItalic) &
+                 ansiForegroundColorCode(fgBlue, false)
+  viaFileStyle = ansiResetCode &
+                 ansiStyleCode(styleItalic) &
+                 ansiStyleCode(styleUnderscore) &
+                 ansiForegroundColorCode(fgBlue, true)
+
 template check*(body: typed) =
   if not body:
     dump body
@@ -73,7 +101,10 @@ proc prefixLines(s: string; p: string): string =
 
 proc numberLines(s: string; first = 1): string =
   for n, line in pairs(splitLines(s, keepEol = true)):
-    result.add "$1  $2" % [ align($(n + first), 3), line ]
+    result.add "$3$1  $4$2$5" % [
+      align($(n + first), 3), line,
+      lineNumStyle, sourceStyle, ansiResetCode
+    ]
 
 proc report(ss: varargs[string, `$`]) =
   writeLine(stderr, ss)
@@ -95,7 +126,7 @@ proc output(t: Test; s: string): NimNode =
 
 proc success(t: var Test): NimNode =
   t.status = Okay
-  result = t.output(t.name)
+  result = t.output(successStyle & t.name & ansiResetCode)
 
 proc countComments(n: NimNode): int =
   assert not n.isNil
@@ -122,10 +153,16 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
   for s in items(stack):
     if cf != $s.filename:
       cf = $s.filename
-      result.add relativePath(cf, path)
+      result.add "$2$1$3" % [
+        relativePath(cf, path),
+        viaFileStyle, ansiResetCode
+      ]
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
-    result.add "$1 $2  # in $3()" % [ line, code, $s.procname ]
+    result.add "$4$1 $5$2  $6# in $3()$7" % [
+      line, code, $s.procname,
+      lineNumStyle, sourceStyle, viaProcStyle, ansiResetCode
+    ]
     when false:
       # future substring search
       var where: string
@@ -160,7 +197,7 @@ proc setExitCode(t: Test; code = QuitFailure): NimNode =
 proc failure(t: var Test; n: NimNode = nil): NimNode =
   t.status = Fail
   result = newStmtList()
-  result.add t.output(t.name)
+  result.add t.output(failureStyle & t.name & ansiResetCode)
   result.add t.renderSource
   {.warning: "due to nim bug #15160, we have to leave this in!".}
   if not n.isNil:
@@ -191,8 +228,11 @@ proc exception(t: var Test; n: NimNode): NimNode =
   assert not n.isNil
   t.status = Died
   result = newStmtList()
-  result.add t.output(infix(newLit(t.name & ": "), "&",
-                            n.exceptionString))
+  result.add t.output(nestList(ident"&", newStmtList(
+                               exceptionStyle.newLit,
+                               newLit(t.name & ": "),
+                               n.exceptionString,
+                               ansiResetCode.newLit)))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
@@ -200,7 +240,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
 proc compilerr(t: var Test): NimNode =
   t.status = Oops
   result = newStmtList()
-  result.add t.output(t.name & ": compile failed")
+  result.add t.output(oopsStyle & t.name & ": compile failed" & ansiResetCode)
   result.add t.renderSource
   result.add t.setExitCode
 
@@ -316,7 +356,8 @@ macro testes*(tests: untyped) =
       var n = n.rewriteTestBlock
       var test: Test
       if n.kind == nnkCommentStmt:
-        result.add output(newLit(n.strVal.prefixLines($Info & " ")))
+        let text = commentStyle & n.strVal & ansiResetCode
+        result.add output(newLit(text.prefixLines($Info & " ")))
       else:
         let name = findName(n, index)
         test = makeTest(n, name)
