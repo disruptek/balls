@@ -2,12 +2,18 @@ name: CI
 on:
   push:
     paths:
-      - 'src/**'
+      - '**.cfg'
+      - '**.nims'
+      - '**.nim'
+      - '**.nimble'
       - 'tests/**'
       - '.github/workflows/ci.yml'
   pull_request:
     paths:
-      - 'src/**'
+      - '**.cfg'
+      - '**.nims'
+      - '**.nim'
+      - '**.nimble'
       - 'tests/**'
       - '.github/workflows/ci.yml'
 
@@ -31,7 +37,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          path: dnsstamps
+          path: testes
 
       - name: Setup environment
         shell: bash
