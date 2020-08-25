@@ -1,5 +1,4 @@
 import std/os
-import std/exitprocs
 
 import testes
 

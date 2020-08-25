@@ -1,12 +1,16 @@
 import std/os
 import std/sequtils
-import std/exitprocs
 import std/terminal
 import std/sugar
 import std/strutils
 import std/macros
-import std/compilesettings
 import std/colors
+
+when (NimMajor, NimMinor) >= (1, 3):
+  import std/exitprocs
+else:
+  proc setProgramResult(q: int) =
+    programResult = q
 
 import cutelog
 
@@ -90,7 +94,10 @@ const
 template check*(body: typed) =
   if not body:
     dump body
-    raise newException(AssertionDefect, "check failed")
+    when (NimMajor, NimMinor) >= (1, 3):
+      raise newException(AssertionDefect, "check failed")
+    else:
+      raise newException(AssertionError, "check failed")
 
 proc `status=`(t: var Test; s: StatusKind) =
   system.`=`(t.status, max(t.status, s))
@@ -128,14 +135,15 @@ proc success(t: var Test): NimNode =
   t.status = Okay
   result = t.output(successStyle & t.name & ansiResetCode)
 
-proc countComments(n: NimNode): int =
-  assert not n.isNil
-  if n.kind == nnkStmtList:
-    for _ in items(n):
-      if _.kind == nnkCommentStmt:
-        result.inc len(_.strVal.splitLines())
-      else:
-        break
+when false:
+  proc countComments(n: NimNode): int =
+    assert not n.isNil
+    if n.kind == nnkStmtList:
+      for _ in items(n):
+        if _.kind == nnkCommentStmt:
+          result.inc len(_.strVal.splitLines())
+        else:
+          break
 
 proc fromFileGetLine(file: string; line: int): string =
   let lines = toSeq lines(file)
@@ -199,17 +207,7 @@ proc failure(t: var Test; n: NimNode = nil): NimNode =
   result = newStmtList()
   result.add t.output(failureStyle & t.name & ansiResetCode)
   result.add t.renderSource
-  {.warning: "due to nim bug #15160, we have to leave this in!".}
-  if not n.isNil:
-    result.add t.renderTrace(n)
-  result.add t.setExitCode
-
-proc badassert(t: var Test; n: NimNode = nil): NimNode =
-  ## like failure(), but don't render the stack trace
-  t.status = Fail
-  result = newStmtList()
-  result.add t.output(t.name)
-  result.add t.renderSource
+  result.add t.renderTrace(n)
   result.add t.setExitCode
 
 proc exceptionString(n: NimNode): NimNode =
@@ -217,6 +215,21 @@ proc exceptionString(n: NimNode): NimNode =
   result = infix(infix(newCall(ident"$", newDotExpr(n, ident"name")),
                        "&", ": ".newLit),
                  "&", newDotExpr(n, ident"msg"))
+
+proc badassert(t: var Test; n: NimNode = nil): NimNode =
+  ## like failure(), but don't render the stack trace
+  t.status = Fail
+  result = newStmtList()
+  if n.isNil:
+    result.add t.output(failureStyle & t.name & ansiResetCode)
+  else:
+    result.add t.output(nestList(ident"&", newStmtList(
+                                 failureStyle.newLit,
+                                 t.name.newLit, newLit(": "),
+                                 newDotExpr(n, ident"msg"),
+                                 ansiResetCode.newLit)))
+  result.add t.renderSource
+  result.add t.setExitCode
 
 proc skipped(t: Test; n: NimNode): NimNode =
   assert not n.isNil
@@ -237,7 +250,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
   result.add t.renderTrace(n)
   result.add t.setExitCode
 
-proc compilerr(t: var Test): NimNode =
+proc compilerr(t: var Test): NimNode {.used.} =
   t.status = Oops
   result = newStmtList()
   result.add t.output(oopsStyle & t.name & ": compile failed" & ansiResetCode)
@@ -249,36 +262,29 @@ proc skip*(msg = "skipped") =
 
 proc wrapExcept(t: var Test): NimNode =
   var skipping = bindSym"SkipError"
-  var assertion = bindSym"AssertionDefect"
+  when (NimMajor, NimMinor) >= (1, 3):
+    var assertion = bindSym"AssertionDefect"
+  else:
+    var assertion = bindSym"AssertionError"
   var catchall = bindSym"Exception"
-  var e1 = genSym(nskLet, "e")
-  var e2 = genSym(nskLet, "e")
-  var e3 = genSym(nskLet, "e")
+  var e1 {.used.} = genSym(nskLet, "e")
+  var e2 {.used.} = genSym(nskLet, "e")
+  var e3 {.used.} = genSym(nskLet, "e")
   result = nnkTryStmt.newTree(t.n,
            nnkExceptBranch.newTree(infix(skipping, "as", e1), t.skipped(e1)),
-           nnkExceptBranch.newTree(infix(assertion, "as", e2), t.failure(e2)),
+           nnkExceptBranch.newTree(infix(assertion, "as", e2), t.badassert(e2)),
            nnkExceptBranch.newTree(infix(catchall, "as", e3), t.exception(e3)))
 
 proc makeTest(n: NimNode; name: string): Test =
   assert not n.isNil
   result = Test(name: name, orig: n)
-  let beuno = genSym(nskLabel, "beuno")  # all good, bro
-  let arrrg = genSym(nskLabel, "arrrg")  # bad news, pal
+  let beuno {.used.} = genSym(nskLabel, "beuno")  # all good, bro
+  let arrrg {.used.} = genSym(nskLabel, "arrrg")  # bad news, pal
 
   result.n = copyNimTree(n).newStmtList
 
   if n.kind in testable:
     result.n.add result.success
-
-    when false:
-      # emit a success if we exited the block normally
-      n.add result.success
-      n.add nnkBreakStmt.newTree(arrrg)
-      result.n = nnkBlockStmt.newTree(beuno, n)
-
-      # emit a failure if we broke out of the success block
-      result.n = nnkBlockStmt.newTree(arrrg,
-                                      newStmtList(result.n, result.failure))
 
     # wrap it to catch any exceptions
     result.n = result.wrapExcept
@@ -320,12 +326,13 @@ proc rewriteTestBlock(n: NimNode): NimNode =
         let name = newCommentStmtNode(n[1].strVal)
         result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(name, n[2]))
 
-proc shortenRepr(n: NimNode): string =
-  let splat = repr(n).splitLines
-  if len(splat) == 1:
-    result = splat[0]
-  else:
-    result = splat[0] & " ⮠..."
+when false:
+  proc shortenRepr(n: NimNode): string =
+    let splat = repr(n).splitLines
+    if len(splat) == 1:
+      result = splat[0]
+    else:
+      result = splat[0] & " ⮠..."
 
 proc findName(n: NimNode; index: int): string =
   ## generate a name for a test block
