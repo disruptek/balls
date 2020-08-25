@@ -23,5 +23,4 @@ task test, "run tests for travis":
   execTest("tests/testicles.nim")
 
 task docs, "generate some docs":
-  exec "nim doc --project --outdir=docs testes.nim"
   exec "termtosvg docs/demo.svg --loop-delay=10000 --screen-geometry=80x60 --template=window_frame_powershell --command=\"nim c -r tests/balls.nim\""
