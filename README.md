@@ -1,4 +1,4 @@
-# testes [![Build Status](https://travis-ci.org/disruptek/testes.svg?branch=master)](https://travis-ci.org/disruptek/testes)
+# testes ![CI](https://github.com/disruptek/testes/workflows/CI/badge.svg)
 
 A small unittest macro with some features I needed.
 
