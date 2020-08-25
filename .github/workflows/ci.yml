@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           cd testes
-          nimble develop
+          nimble --accept develop
           nimble test
 
       - name: Build docs
