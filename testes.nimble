@@ -13,8 +13,11 @@ proc execCmd(cmd: string) =
   exec cmd
 
 proc execTest(test: string) =
-  execCmd "nim c --gc:arc -r " & test
-  execCmd "nim c --gc:arc -d:danger -r " & test
+  execCmd "nim c -r " & test
+  execCmd "nim c -d:danger -r " & test
+  when (NimMajor, NimMinor) >= (1, 2):
+    execCmd "nim c --gc:arc -r " & test
+    execCmd "nim c --gc:arc -d:danger -r " & test
 
 task test, "run tests for travis":
   execTest("tests/testicles.nim")
