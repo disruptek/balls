@@ -245,19 +245,19 @@ proc compilerr(t: var Test): NimNode =
   result.add t.setExitCode
 
 proc skip*(msg = "skipped") =
-  when querySetting(command) == "c":
-    report "💣 skipping is broken on C (not C++) backend due to a bug"
   raise newException(SkipError, msg)
 
 proc wrapExcept(t: var Test): NimNode =
   var skipping = bindSym"SkipError"
   var assertion = bindSym"AssertionDefect"
   var catchall = bindSym"Exception"
-  var e = genSym(nskLet, "e")
+  var e1 = genSym(nskLet, "e")
+  var e2 = genSym(nskLet, "e")
+  var e3 = genSym(nskLet, "e")
   result = nnkTryStmt.newTree(t.n,
-           nnkExceptBranch.newTree(infix(skipping, "as", e), t.skipped(e)),
-           nnkExceptBranch.newTree(infix(assertion, "as", e), t.failure(e)),
-           nnkExceptBranch.newTree(infix(catchall, "as", e), t.exception(e)))
+           nnkExceptBranch.newTree(infix(skipping, "as", e1), t.skipped(e1)),
+           nnkExceptBranch.newTree(infix(assertion, "as", e2), t.failure(e2)),
+           nnkExceptBranch.newTree(infix(catchall, "as", e3), t.exception(e3)))
 
 proc makeTest(n: NimNode; name: string): Test =
   assert not n.isNil
