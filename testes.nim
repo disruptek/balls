@@ -167,7 +167,7 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
       ]
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
-    result.add "$4$1 $5$2  $6# in $3()$7" % [
+    result.add "$4$1 $5$2  $6# $3()$7" % [
       line, code, $s.procname,
       lineNumStyle, sourceStyle, viaProcStyle, ansiResetCode
     ]
