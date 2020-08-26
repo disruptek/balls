@@ -1,6 +1,6 @@
 [submodule "cutelog"]
-	path = deps/cutelog
+	path = cutelog
 	url = https://github.com/disruptek/cutelog
 [submodule "bump"]
-	path = deps/bump
+	path = bump
 	url = https://github.com/disruptek/bump
