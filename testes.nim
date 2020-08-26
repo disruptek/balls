@@ -220,6 +220,7 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   ## like failure(), but don't render the stack trace
   t.status = Fail
   result = newStmtList()
+  result.add t.renderSource
   if n.isNil:
     result.add t.output(failureStyle & t.name & ansiResetCode)
   else:
@@ -228,7 +229,7 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
                                  t.name.newLit, newLit(": "),
                                  newDotExpr(n, ident"msg"),
                                  ansiResetCode.newLit)))
-  result.add t.renderSource
+    result.add t.renderTrace(n)
   result.add t.setExitCode
 
 proc skipped(t: Test; n: NimNode): NimNode =
