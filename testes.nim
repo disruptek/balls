@@ -64,32 +64,32 @@ type
     name: string
 
 const
-  commentStyle = ansiResetCode &
-                 ansiStyleCode(styleItalic) &
-                 ansiForegroundColorCode(fgWhite, true)
-  lineNumStyle = ansiResetCode &
-                 ansiStyleCode(styleItalic) &
-                 ansiForegroundColorCode(fgBlack, true)
-  successStyle = ansiResetCode &
-                 ansiForegroundColorCode(fgGreen)
-  oopsStyle = ansiResetCode &
-              ansiStyleCode(styleBright) &
-              ansiStyleCode(styleReverse) &
-              ansiBackgroundColorCode(Color(0xFFFFFF)) &
-              ansiForegroundColorCode(fgRed, true)
-  failureStyle = ansiResetCode &
-                 ansiForegroundColorCode(fgRed)
+  commentStyle   = ansiResetCode &
+                   ansiStyleCode(styleItalic) &
+                   ansiForegroundColorCode(fgWhite, true)
+  lineNumStyle   = ansiResetCode &
+                   ansiStyleCode(styleItalic) &
+                   ansiForegroundColorCode(fgBlack, true)
+  successStyle   = ansiResetCode &
+                   ansiForegroundColorCode(fgGreen)
+  oopsStyle      = ansiResetCode &
+                   ansiStyleCode(styleBright) &
+                   ansiStyleCode(styleReverse) &
+                   ansiBackgroundColorCode(Color(0xFFFFFF)) &
+                   ansiForegroundColorCode(fgRed, true)
+  failureStyle   = ansiResetCode &
+                   ansiForegroundColorCode(fgRed)
   exceptionStyle = ansiResetCode &
                    ansiForegroundColorCode(fgRed, true)
-  sourceStyle = ansiResetCode &
-                ansiForegroundColorCode(fgDefault)
-  viaProcStyle = ansiResetCode &
-                 ansiStyleCode(styleItalic) &
-                 ansiForegroundColorCode(fgBlue, false)
-  viaFileStyle = ansiResetCode &
-                 ansiStyleCode(styleItalic) &
-                 ansiStyleCode(styleUnderscore) &
-                 ansiForegroundColorCode(fgBlue, true)
+  sourceStyle    = ansiResetCode &
+                   ansiForegroundColorCode(fgDefault)
+  viaProcStyle   = ansiResetCode &
+                   ansiStyleCode(styleItalic) &
+                   ansiForegroundColorCode(fgBlue, false)
+  viaFileStyle   = ansiResetCode &
+                   ansiStyleCode(styleItalic) &
+                   ansiStyleCode(styleUnderscore) &
+                   ansiForegroundColorCode(fgBlue, true)
 
 template check*(body: typed) =
   if not body:
