@@ -13,13 +13,20 @@ proc execCmd(cmd: string) =
   exec cmd
 
 proc execTest(test: string) =
-  execCmd "nim c -r " & test
-  execCmd "nim c -d:danger -r " & test
-  when (NimMajor, NimMinor) >= (1, 2):
-    execCmd "nim c --gc:arc -r " & test
+  when getEnv("GITHUB_ACTIONS", "false") != "true":
+    execCmd "nim c -r " & test
     execCmd "nim c --gc:arc -d:danger -r " & test
+  else:
+    execCmd "nim c              -r " & test
+    execCmd "nim cpp            -r " & test
+    execCmd "nim c   -d:danger  -r " & test
+    execCmd "nim cpp -d:danger  -r " & test
+    when (NimMajor, NimMinor) >= (1, 2):
+      execCmd "nim c --useVersion:1.0 -d:danger -r " & test
+      execCmd "nim c   --gc:arc -d:danger -r " & test
+      execCmd "nim cpp --gc:arc -d:danger -r " & test
 
-task test, "run tests for travis":
+task test, "run tests for ci":
   execTest("tests/testicles.nim")
 
 task docs, "generate some docs":
