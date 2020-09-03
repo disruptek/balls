@@ -63,33 +63,46 @@ type
     n: NimNode
     name: string
 
+  Styling = distinct string
+
+proc `&`(a, b: Styling): Styling {.borrow.}
+proc `&`(a: Styling; b: string): Styling = a & Styling(b)
+proc `&`(a: string; b: Styling): Styling = b & a
+
 const
-  commentStyle   = ansiResetCode &
-                   ansiStyleCode(styleItalic) &
-                   ansiForegroundColorCode(fgWhite, true)
-  lineNumStyle   = ansiResetCode &
-                   ansiStyleCode(styleItalic) &
-                   ansiForegroundColorCode(fgBlack, true)
-  successStyle   = ansiResetCode &
-                   ansiForegroundColorCode(fgGreen)
-  oopsStyle      = ansiResetCode &
-                   ansiStyleCode(styleBright) &
-                   ansiStyleCode(styleReverse) &
-                   ansiBackgroundColorCode(Color(0xFFFFFF)) &
-                   ansiForegroundColorCode(fgRed, true)
-  failureStyle   = ansiResetCode &
-                   ansiForegroundColorCode(fgRed)
-  exceptionStyle = ansiResetCode &
-                   ansiForegroundColorCode(fgRed, true)
-  sourceStyle    = ansiResetCode &
-                   ansiForegroundColorCode(fgDefault)
-  viaProcStyle   = ansiResetCode &
-                   ansiStyleCode(styleItalic) &
-                   ansiForegroundColorCode(fgBlue, false)
-  viaFileStyle   = ansiResetCode &
-                   ansiStyleCode(styleItalic) &
-                   ansiStyleCode(styleUnderscore) &
-                   ansiForegroundColorCode(fgBlue, true)
+  resetStyle      = Styling ansiResetCode
+  commentStyle    = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiForegroundColorCode(fgWhite, true)
+  lineNumStyle    = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiForegroundColorCode(fgBlack, true)
+  successStyle    = Styling ansiForegroundColorCode(fgGreen)
+  oopsStyle       = Styling ansiStyleCode(styleBright) &
+                    Styling ansiStyleCode(styleReverse) &
+                    Styling ansiBackgroundColorCode(Color(0xFFFFFF)) &
+                    Styling ansiForegroundColorCode(fgRed, true)
+  failureStyle    = Styling ansiForegroundColorCode(fgRed)
+  exceptionStyle  = Styling ansiForegroundColorCode(fgRed, true)
+  sourceStyle     = Styling ansiForegroundColorCode(fgDefault)
+  viaProcStyle    = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiForegroundColorCode(fgBlue, false)
+  viaFileStyle    = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiStyleCode(styleUnderscore) &
+                    Styling ansiForegroundColorCode(fgBlue, true)
+
+proc `$`(style: Styling): string =
+  when nimvm:
+    result = ""
+  else:
+    if stdout.isAtty:
+      if style.string == resetStyle.string:
+        result = style.string
+      else:
+        result = $resetStyle & style.string
+    else:
+      result = ""
+
+proc style(style: Styling; msg: string): string =
+  result = $style & msg & $resetStyle
 
 template check*(body: typed) =
   if not body:
@@ -108,10 +121,9 @@ proc prefixLines(s: string; p: string): string =
 
 proc numberLines(s: string; first = 1): string =
   for n, line in pairs(splitLines(s, keepEol = true)):
-    result.add "$3$1  $4$2$5" % [
-      align($(n + first), 3), line,
-      lineNumStyle, sourceStyle, ansiResetCode
-    ]
+    result.add "$1$4$2  $5$3$1" % [
+      $resetStyle, align($(n + first), 3), line,
+      $lineNumStyle, $sourceStyle ]
 
 proc report(ss: varargs[string, `$`]) =
   writeLine(stderr, ss)
@@ -133,7 +145,7 @@ proc output(t: Test; s: string): NimNode =
 
 proc success(t: var Test): NimNode =
   t.status = Okay
-  result = t.output(successStyle & t.name & ansiResetCode)
+  result = t.output(style(successStyle,  t.name))
 
 when false:
   proc countComments(n: NimNode): int =
@@ -161,15 +173,13 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
   for s in items(stack):
     if cf != $s.filename:
       cf = $s.filename
-      result.add "$2$1$3" % [
-        relativePath(cf, path),
-        viaFileStyle, ansiResetCode
-      ]
+      result.add "$1$3$2" % [ $resetStyle,
+        relativePath(cf, path), $viaFileStyle ]
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
-    result.add "$4$1 $5$2  $6# $3()$7" % [
+    result.add "$1$5$2 $6$3  $7# $3()$1" % [ $resetStyle,
       line, code, $s.procname,
-      lineNumStyle, sourceStyle, viaProcStyle, ansiResetCode
+      $lineNumStyle, $sourceStyle, $viaProcStyle
     ]
     when false:
       # future substring search
@@ -205,7 +215,7 @@ proc setExitCode(t: Test; code = QuitFailure): NimNode =
 proc failure(t: var Test; n: NimNode = nil): NimNode =
   t.status = Fail
   result = newStmtList()
-  result.add t.output(failureStyle & t.name & ansiResetCode)
+  result.add t.output(style(failureStyle, t.name))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
@@ -222,13 +232,13 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   result = newStmtList()
   result.add t.renderSource
   if n.isNil:
-    result.add t.output(failureStyle & t.name & ansiResetCode)
+    result.add t.output(style(failureStyle, t.name))
   else:
     result.add t.output(nestList(ident"&", newStmtList(
-                                 failureStyle.newLit,
+                                 newLit $failureStyle,
                                  t.name.newLit, newLit(": "),
                                  newDotExpr(n, ident"msg"),
-                                 ansiResetCode.newLit)))
+                                 newLit $resetStyle)))
     result.add t.renderTrace(n)
   result.add t.setExitCode
 
@@ -243,10 +253,10 @@ proc exception(t: var Test; n: NimNode): NimNode =
   t.status = Died
   result = newStmtList()
   result.add t.output(nestList(ident"&", newStmtList(
-                               exceptionStyle.newLit,
+                               newLit $exceptionStyle,
                                newLit(t.name & ": "),
                                n.exceptionString,
-                               ansiResetCode.newLit)))
+                               newLit $resetStyle)))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
@@ -254,7 +264,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
 proc compilerr(t: var Test): NimNode {.used.} =
   t.status = Oops
   result = newStmtList()
-  result.add t.output(oopsStyle & t.name & ": compile failed" & ansiResetCode)
+  result.add t.output(style(oopsStyle, t.name & ": compile failed"))
   result.add t.renderSource
   result.add t.setExitCode
 
@@ -364,7 +374,7 @@ macro testes*(tests: untyped) =
       var n = n.rewriteTestBlock
       var test: Test
       if n.kind == nnkCommentStmt:
-        let text = commentStyle & n.strVal & ansiResetCode
+        let text = style(commentStyle, n.strVal)
         result.add output(newLit(text.prefixLines($Info & " ")))
       else:
         let name = findName(n, index)
