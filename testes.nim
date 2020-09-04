@@ -118,13 +118,15 @@ proc incResults(test: Test): NimNode =
                               bindSym"testResults",
                               newLit test.status.ord))
 
-template check*(body: typed) =
-  if not body:
-    dump body
-    when (NimMajor, NimMinor) >= (1, 3):
-      raise newException(AssertionDefect, "check failed")
-    else:
-      raise newException(AssertionError, "check failed")
+macro check*(body: untyped) =
+  ## Check one or more statements (in a block); equivalent to `assert`.
+  let assert = bindSym"assert"
+  if body.kind == nnkStmtList:
+    result = newStmtList()
+    for child in items(body):
+      result.add newCall(assert, child)
+  else:
+    result = newCall(assert, body)
 
 proc `status=`(t: var Test; s: StatusKind) =
   system.`=`(t.status, max(t.status, s))

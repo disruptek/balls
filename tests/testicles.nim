@@ -25,6 +25,12 @@ testes:
   block:
     discard "unnamed test"
 
+  block:
+    ## check a list of statements in a block
+    check:
+      r < 5
+      r > 3
+
   inc r
   assert r > 0
   ## this is a nice comment
