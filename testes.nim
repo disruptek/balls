@@ -91,18 +91,23 @@ const
 
 proc `$`(style: Styling): string =
   when nimvm:
-    result = ""
+    # don't try to mess with styling at compile-time
+    result = style.string
   else:
+    # at runtime, try to emit style if possible
     if stdout.isAtty:
-      if style.string == resetStyle.string:
-        result = style.string
-      else:
-        result = $resetStyle & style.string
-    else:
-      result = ""
+      result = style.string
+      if result != resetStyle.string:
+        result = resetStyle.string & result
 
-proc style(style: Styling; msg: string): string =
-  result = $style & msg & $resetStyle
+proc `&`(style: Styling; n: NimNode): NimNode =
+  let isAtty = bindSym"isAtty"
+  var n = newCall(ident"$", n)
+  let text = newStmtList(newLit($style), n, newLit($resetStyle))
+  result = nnkIfStmt.newNimNode(n)
+  result.add nnkElifBranch.newTree(newCall(isAtty, ident"stdout"),
+                                   nestList(ident"&", text))
+  result.add nnkElse.newTree(n)
 
 template check*(body: typed) =
   if not body:
@@ -119,11 +124,19 @@ proc prefixLines(s: string; p: string): string =
   for line in items(splitLines(s, keepEol = true)):
     result.add p & line
 
-proc numberLines(s: string; first = 1): string =
+proc prefixLines(s: NimNode; p: string): NimNode =
+  result = newStmtList()
+  for line in items(s):
+    result.add infix(p.newLit, "&", line)
+  result = nestList(ident"&", result)
+
+proc numberLines(s: string; first = 1): NimNode =
+  result = newStmtList()
   for n, line in pairs(splitLines(s, keepEol = true)):
-    result.add "$1$4$2  $5$3$1" % [
-      $resetStyle, align($(n + first), 3), line,
-      $lineNumStyle, $sourceStyle ]
+    var ln = lineNumStyle & align($(n + first), 3).newLit
+    ln = infix(ln, "&", "  ".newLit)
+    ln = infix(ln, "&", sourceStyle & line.newLit)
+    result.add ln
 
 proc report(ss: varargs[string, `$`]) =
   writeLine(stderr, ss)
@@ -140,12 +153,15 @@ proc output(t: Test; n: NimNode): NimNode =
                           newCall(ident"$", n),
                           newLit($t.status & " ")))
 
-proc output(t: Test; s: string): NimNode =
-  result = t.output s.newLit
+proc output(test: Test; styling: Styling; n: NimNode): NimNode =
+  assert not n.isNil
+  let prefixer = bindSym"prefixLines"
+  result = newCall(prefixer, newCall(ident"$", n), newLit($test.status & " "))
+  result = test.output(styling & result)
 
 proc success(t: var Test): NimNode =
   t.status = Okay
-  result = t.output(style(successStyle,  t.name))
+  result = t.output(successStyle & newLit(t.name))
 
 when false:
   proc countComments(n: NimNode): int =
@@ -173,14 +189,12 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
   for s in items(stack):
     if cf != $s.filename:
       cf = $s.filename
-      result.add "$1$3$2" % [ $resetStyle,
+      result.add "$1$3$2$1" % [ $resetStyle,
         relativePath(cf, path), $viaFileStyle ]
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
-    result.add "$1$5$2 $6$3  $7# $3()$1" % [ $resetStyle,
-      line, code, $s.procname,
-      $lineNumStyle, $sourceStyle, $viaProcStyle
-    ]
+    result.add "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle,
+      line, code, $s.procname, $lineNumStyle, $sourceStyle, $viaProcStyle ]
     when false:
       # future substring search
       var where: string
@@ -204,18 +218,18 @@ proc renderSource(t: Test): NimNode =
     if node[0].kind == nnkCommentStmt:
       let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
       node[0] = newCommentStmtNode(dropFirst)
-  result = t.output(repr(node).numberLines(info.line).prefixLines " 🗏 ")
+  result = t.output(repr(node).numberLines(info.line).prefixLines(" 🗏 "))
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let isAtty = bindSym"isAtty"
   let setResult = bindSym"setProgramResult"
-  result = newIfStmt((prefix(newCall(isAtty, ident"stdin"), "not"),
+  result = newIfStmt((prefix(newCall(isAtty, ident"stdout"), "not"),
                       newCall(setResult, code.newLit)))
 
 proc failure(t: var Test; n: NimNode = nil): NimNode =
   t.status = Fail
   result = newStmtList()
-  result.add t.output(style(failureStyle, t.name))
+  result.add t.output(failureStyle & newLit(t.name))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
@@ -232,13 +246,11 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   result = newStmtList()
   result.add t.renderSource
   if n.isNil:
-    result.add t.output(style(failureStyle, t.name))
+    result.add t.output(failureStyle & newLit(t.name))
   else:
-    result.add t.output(nestList(ident"&", newStmtList(
-                                 newLit $failureStyle,
-                                 t.name.newLit, newLit(": "),
-                                 newDotExpr(n, ident"msg"),
-                                 newLit $resetStyle)))
+    let text = newStmtList(t.name.newLit, newLit(": "),
+                           newDotExpr(n, ident"msg"))
+    result.add t.output(failureStyle & nestList(ident"&", text))
     result.add t.renderTrace(n)
   result.add t.setExitCode
 
@@ -251,12 +263,9 @@ proc skipped(t: Test; n: NimNode): NimNode =
 proc exception(t: var Test; n: NimNode): NimNode =
   assert not n.isNil
   t.status = Died
+  let text = newStmtList(newLit(t.name & ": "), n.exceptionString)
   result = newStmtList()
-  result.add t.output(nestList(ident"&", newStmtList(
-                               newLit $exceptionStyle,
-                               newLit(t.name & ": "),
-                               n.exceptionString,
-                               newLit $resetStyle)))
+  result.add t.output(exceptionStyle & nestList(ident"&", text))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
@@ -264,7 +273,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
 proc compilerr(t: var Test): NimNode {.used.} =
   t.status = Oops
   result = newStmtList()
-  result.add t.output(style(oopsStyle, t.name & ": compile failed"))
+  result.add t.output(oopsStyle & newLit(t.name & ": compile failed"))
   result.add t.renderSource
   result.add t.setExitCode
 
@@ -304,7 +313,7 @@ proc makeTest(n: NimNode; name: string): Test =
     when defined(release):
       result.status = Okay
     # output the status in any event; otherwise there will be no output
-    result.n.add result.output(result.name)
+    result.n.add result.output(newLit result.name)
 
   # wrap it into `when compiles(original): test else: compilerr`
   when not defined(release):
@@ -374,8 +383,8 @@ macro testes*(tests: untyped) =
       var n = n.rewriteTestBlock
       var test: Test
       if n.kind == nnkCommentStmt:
-        let text = style(commentStyle, n.strVal)
-        result.add output(newLit(text.prefixLines($Info & " ")))
+        result.add output(commentStyle &
+                          newLit(prefixLines(n.strVal, $Info & " ")))
       else:
         let name = findName(n, index)
         test = makeTest(n, name)
