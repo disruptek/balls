@@ -62,6 +62,7 @@ type
     orig: NimNode
     n: NimNode
     name: string
+    number: int
 
   Styling = distinct string
 
@@ -109,6 +110,14 @@ proc `&`(style: Styling; n: NimNode): NimNode =
                                    nestList(ident"&", text))
   result.add nnkElse.newTree(n)
 
+var testCount {.compileTime}: int
+var testResults = newSeq[int](1 + ord(high StatusKind))
+
+proc incResults(test: Test): NimNode =
+  newCall(ident"inc", newTree(nnkBracketExpr,
+                              bindSym"testResults",
+                              newLit test.status.ord))
+
 template check*(body: typed) =
   if not body:
     dump body
@@ -141,7 +150,7 @@ proc numberLines(s: string; first = 1): NimNode =
 proc report(ss: varargs[string, `$`]) =
   writeLine(stderr, ss)
 
-proc output(n: NimNode): NimNode {.deprecated.} =
+proc output(n: NimNode): NimNode =
   assert not n.isNil
   let report = bindSym"report"
   result = newCall(report, n)
@@ -161,7 +170,9 @@ proc output(test: Test; styling: Styling; n: NimNode): NimNode =
 
 proc success(t: var Test): NimNode =
   t.status = Okay
-  result = t.output(successStyle & newLit(t.name))
+  result = newStmtList()
+  result.add t.incResults
+  result.add t.output(successStyle & newLit(t.name))
 
 when false:
   proc countComments(n: NimNode): int =
@@ -229,6 +240,7 @@ proc setExitCode(t: Test; code = QuitFailure): NimNode =
 proc failure(t: var Test; n: NimNode = nil): NimNode =
   t.status = Fail
   result = newStmtList()
+  result.add t.incResults
   result.add t.output(failureStyle & newLit(t.name))
   result.add t.renderSource
   result.add t.renderTrace(n)
@@ -244,6 +256,7 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   ## like failure(), but don't render the stack trace
   t.status = Fail
   result = newStmtList()
+  result.add t.incResults
   result.add t.renderSource
   if n.isNil:
     result.add t.output(failureStyle & newLit(t.name))
@@ -257,6 +270,7 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
 proc skipped(t: Test; n: NimNode): NimNode =
   assert not n.isNil
   result = newStmtList()
+  result.add t.incResults
   result.add t.output(infix(newLit("⚪ " & t.name & ": "), "&",
                             newDotExpr(n, ident"msg")))
 
@@ -265,6 +279,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
   t.status = Died
   let text = newStmtList(newLit(t.name & ": "), n.exceptionString)
   result = newStmtList()
+  result.add t.incResults
   result.add t.output(exceptionStyle & nestList(ident"&", text))
   result.add t.renderSource
   result.add t.renderTrace(n)
@@ -273,6 +288,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
 proc compilerr(t: var Test): NimNode {.used.} =
   t.status = Oops
   result = newStmtList()
+  result.add t.incResults
   result.add t.output(oopsStyle & newLit(t.name & ": compile failed"))
   result.add t.renderSource
   result.add t.setExitCode
@@ -297,7 +313,8 @@ proc wrapExcept(t: var Test): NimNode =
 
 proc makeTest(n: NimNode; name: string): Test =
   assert not n.isNil
-  result = Test(name: name, orig: n)
+  result = Test(name: name, orig: n, number: testCount)
+  inc testCount
   let beuno {.used.} = genSym(nskLabel, "beuno")  # all good, bro
   let arrrg {.used.} = genSym(nskLabel, "arrrg")  # bad news, pal
 
@@ -374,6 +391,21 @@ proc findName(n: NimNode; index: int): string =
   else:
     result = repr(n)
 
+proc reportResults(): NimNode =
+  var report = bindSym"report"
+  var results = bindSym"testResults"
+  var join = bindSym"join"
+  var lits: seq[NimNode]
+  for status in items(StatusKind):
+    let brack = nnkBracketExpr.newTree(results, newLit status.ord)
+    lits.add newTree(nnkIfStmt,
+             newTree(nnkElIfBranch, infix(brack, ">", 0.newLit),
+                     infix(newLit $status, "&", newCall(ident"$", brack))),
+             newTree(nnkElse, newLit""))
+  lits = @[newLit"##"] & lits
+  var arr = newTree(nnkBracket, lits)
+  result = newCall(report, newCall(join, arr, newLit"  "))
+
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
   inc depth
@@ -391,6 +423,7 @@ macro testes*(tests: untyped) =
         result.add test.n
   finally:
     dec depth
+    result.add reportResults()
 
 when isMainModule:
   import std/options
