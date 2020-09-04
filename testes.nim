@@ -174,16 +174,6 @@ proc success(t: var Test): NimNode =
   result.add t.incResults
   result.add t.output(successStyle & newLit(t.name))
 
-when false:
-  proc countComments(n: NimNode): int =
-    assert not n.isNil
-    if n.kind == nnkStmtList:
-      for _ in items(n):
-        if _.kind == nnkCommentStmt:
-          result.inc len(_.strVal.splitLines())
-        else:
-          break
-
 proc fromFileGetLine(file: string; line: int): string =
   let lines = toSeq lines(file)
   result = lines[line - 1]
@@ -206,11 +196,6 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
     let line = align($s.line, 5)
     result.add "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle,
       line, code, $s.procname, $lineNumStyle, $sourceStyle, $viaProcStyle ]
-    when false:
-      # future substring search
-      var where: string
-      if findWhere(code, sub, where):
-        result.add "$1 $2 ^ (here)" % [ spaces(len(line)), where ]
   report result.join("\n").prefixLines prefix & " 🗇 "
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
@@ -342,17 +327,6 @@ proc makeTest(n: NimNode; name: string): Test =
         result.n),
       nnkElse.newTree(result.compilerr))
 
-when false:
-  proc massageLabel(n: NimNode): NimNode =
-    assert not n.isNil
-    case n.kind
-    of nnkStrLit:
-      result = genSym(nskLabel, $n.strVal)
-    of nnkIntLit:
-      result = genSym(nskLabel, $n.intVal)
-    else:
-      result = n
-
 proc rewriteTestBlock(n: NimNode): NimNode =
   ## rewrite test "something": ... as block: ## something ...
   assert not n.isNil
@@ -362,14 +336,6 @@ proc rewriteTestBlock(n: NimNode): NimNode =
       if n[1].kind == nnkStrLit and n[2].kind == nnkStmtList:
         let name = newCommentStmtNode(n[1].strVal)
         result = nnkBlockStmt.newTree(newEmptyNode(), newStmtList(name, n[2]))
-
-when false:
-  proc shortenRepr(n: NimNode): string =
-    let splat = repr(n).splitLines
-    if len(splat) == 1:
-      result = splat[0]
-    else:
-      result = splat[0] & " ⮠..."
 
 proc findName(n: NimNode; index: int): string =
   ## generate a name for a test block
@@ -441,3 +407,30 @@ when isMainModule:
     clCfg.version = $release.get
   else:
     clCfg.version = "(unknown version)"
+
+when false:
+  proc massageLabel(n: NimNode): NimNode =
+    assert not n.isNil
+    case n.kind
+    of nnkStrLit:
+      result = genSym(nskLabel, $n.strVal)
+    of nnkIntLit:
+      result = genSym(nskLabel, $n.intVal)
+    else:
+      result = n
+
+  proc shortenRepr(n: NimNode): string =
+    let splat = repr(n).splitLines
+    if len(splat) == 1:
+      result = splat[0]
+    else:
+      result = splat[0] & " ⮠..."
+
+  proc countComments(n: NimNode): int =
+    assert not n.isNil
+    if n.kind == nnkStmtList:
+      for _ in items(n):
+        if _.kind == nnkCommentStmt:
+          result.inc len(_.strVal.splitLines())
+        else:
+          break
