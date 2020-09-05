@@ -84,6 +84,10 @@ proc `&`(a: string; b: Styling): Styling = b & a
 
 const
   resetStyle      = Styling ansiResetCode
+  testNumStyle    = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiForegroundColorCode(fgYellow, true)
+  resultsStyle    = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiForegroundColorCode(fgWhite, true)
   commentStyle    = Styling ansiStyleCode(styleItalic) &
                     Styling ansiForegroundColorCode(fgWhite, true)
   lineNumStyle    = Styling ansiStyleCode(styleItalic) &
@@ -274,11 +278,13 @@ proc failure(t: var Test; n: NimNode = nil): NimNode =
   result.add t.renderTrace(n)
   result.add t.setExitCode
 
+proc dotMsg(n: NimNode): NimNode =
+  result = commentStyle & newDotExpr(n, ident"msg")
+
 proc exceptionString(n: NimNode): NimNode =
   assert not n.isNil
   result = infix(infix(dollar(newDotExpr(n, ident"name")),
-                       "&", ": ".newLit),
-                 "&", newDotExpr(n, ident"msg"))
+                       "&", ": ".newLit), "&", n.dotMsg)
 
 proc badassert(t: var Test; n: NimNode = nil): NimNode =
   ## like failure(), but don't render the stack trace
@@ -289,8 +295,7 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   if n.isNil:
     result.add t.output(failureStyle & newLit(t.name))
   else:
-    let text = newStmtList(t.name.newLit, newLit(": "),
-                           newDotExpr(n, ident"msg"))
+    let text = newStmtList(t.name.newLit, newLit(": "), n.dotMsg)
     result.add t.output(failureStyle & nestList(ident"&", text))
     result.add t.renderTrace(n)
   result.add t.setExitCode
@@ -303,7 +308,7 @@ proc skipped(t: var Test; n: NimNode): NimNode =
   var text = newStmtList()
   text.add(skippedStyle & t.name.newLit)
   text.add(": ".newLit)
-  text.add(commentStyle & newDotExpr(n, ident"msg"))
+  text.add(n.dotMsg)
   result.add t.output(nestList(ident"&", text))
 
 proc exception(t: var Test; n: NimNode): NimNode =
