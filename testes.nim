@@ -94,6 +94,8 @@ const
                     Styling ansiBackgroundColorCode(Color(0xFFFFFF)) &
                     Styling ansiForegroundColorCode(fgRed, true)
   failureStyle    = Styling ansiForegroundColorCode(fgRed)
+  skippedStyle    = Styling ansiStyleCode(styleStrikethrough) &
+                    Styling ansiForegroundColorCode(fgMagenta, false)
   exceptionStyle  = Styling ansiForegroundColorCode(fgRed, true)
   sourceStyle     = Styling ansiForegroundColorCode(fgDefault)
   viaProcStyle    = Styling ansiStyleCode(styleItalic) &
@@ -295,8 +297,11 @@ proc skipped(t: var Test; n: NimNode): NimNode =
   t.status = Skip
   result = newStmtList()
   result.add t.incResults
-  result.add t.output(infix(newLit(t.name & ": "), "&",
-                            newDotExpr(n, ident"msg")))
+  var text = newStmtList()
+  text.add(skippedStyle & t.name.newLit)
+  text.add(": ".newLit)
+  text.add(commentStyle & newDotExpr(n, ident"msg"))
+  result.add t.output(nestList(ident"&", text))
 
 proc exception(t: var Test; n: NimNode): NimNode =
   assert not n.isNil
