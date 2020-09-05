@@ -48,7 +48,7 @@ var
 type
   SkipError = object of CatchableError
   StatusKind = enum
-    None = "⚫"
+    None = " "
     Info = "🔵"
     Okay = "🟢"
     Skip = "❔"
