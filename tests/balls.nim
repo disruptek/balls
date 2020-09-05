@@ -74,4 +74,7 @@ testes:
     assert 2 == 4 div 2
     assert 2 != 4 div 2
 
+  block omitted:
+    skip("i just don't wanna")
+
   assert "any statement is a test" != ""

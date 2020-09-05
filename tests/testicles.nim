@@ -44,4 +44,7 @@ testes:
   block omission:
     skip()
 
+  block omitted:
+    skip("i just don't wanna")
+
   assert "any statement is a test" != ""
