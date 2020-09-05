@@ -150,6 +150,9 @@ proc `&`(style: Styling; n: NimNode): NimNode =
                                    nestList(ident"&", text))
   result.add nnkElse.newTree(n)
 
+proc comment(n: NimNode): NimNode =
+  result = infix(lineNumStyle & newLit"## ", "&", n)
+
 var testCount {.compileTime}: int
 var testResults = newSeq[int](1 + ord(high StatusKind))
 
@@ -404,17 +407,16 @@ proc findName(n: NimNode; index: int): string =
 proc reportResults(): NimNode =
   var report = bindSym"report"
   var results = bindSym"testResults"
-  var join = bindSym"join"
-  var lits: seq[NimNode]
+  var legend = newStmtList()
+  legend.add comment(resultsStyle & newLit($testCount & " tests  "))
   for status in items(StatusKind):
+    legend.add newLit"  "
     let brack = nnkBracketExpr.newTree(results, newLit status.ord)
-    lits.add newTree(nnkIfStmt,
-             newTree(nnkElIfBranch, infix(brack, ">", 0.newLit),
-                     infix(newLit $status, "&", newCall(ident"$", brack))),
-             newTree(nnkElse, newLit""))
-  lits = @[newLit"##"] & lits
-  var arr = newTree(nnkBracket, lits)
-  result = newCall(report, newCall(join, arr, newLit"  "))
+    legend.add newTree(nnkIfStmt,
+               newTree(nnkElIfBranch, infix(brack, ">", 0.newLit),
+                       infix(newLit $status, "&", dollar(brack))),
+               newTree(nnkElse, newLit""))
+  result = newCall(report, combineLiterals(nestList(ident"&", legend)))
 
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
@@ -425,8 +427,7 @@ macro testes*(tests: untyped) =
       var n = n.rewriteTestBlock
       var test: Test
       if n.kind == nnkCommentStmt:
-        result.add output(commentStyle &
-                          newLit(prefixLines(n.strVal, $Info & " ")))
+        result.add output(comment(commentStyle & n.strVal.newLit))
       else:
         let name = findName(n, index)
         test = makeTest(n, name)
