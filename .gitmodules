@@ -1,6 +1,12 @@
 [submodule "cutelog"]
 	path = cutelog
 	url = https://github.com/disruptek/cutelog
+  branch = tag/1.1.2
 [submodule "bump"]
 	path = bump
 	url = https://github.com/disruptek/bump
+  branch = tag/1.8.22
+[submodule "grok"]
+	path = grok
+	url = git+ssh://git@github.com/disruptek/grok
+	branch = master
