@@ -42,13 +42,10 @@ const
 
   }
 
-var
-  depth {.compileTime.}: int
-
 type
   SkipError = object of CatchableError
   StatusKind = enum
-    None = " "
+    None = "  "
     Info = "🔵"
     Okay = "🟢"
     Skip = "❔"
@@ -225,7 +222,8 @@ proc fromFileGetLine(file: string; line: int): string =
   let lines = toSeq lines(file)
   result = lines[line - 1]
 
-proc findWhere(s: string; p: string; into: var string): bool =
+proc findWhere(s: string; p: string; into: var string): bool {.used.} =
+  ## find the location of a substring and, if found, produce empty prefix
   result = s.count(p) == 1
   if result:
     into = spaces(s.find(p))
@@ -322,6 +320,23 @@ proc exception(t: var Test; n: NimNode): NimNode =
   result.add t.renderTrace(n)
   result.add t.setExitCode
 
+proc reportResults(): NimNode =
+  var report = bindSym"report"
+  var results = bindSym"testResults"
+  var legend = newStmtList()
+  legend.add comment(resultsStyle & newLit($testCount & " tests  "))
+  for status in items(StatusKind):
+    legend.add newLit"  "
+    let brack = nnkBracketExpr.newTree(results, newLit status.ord)
+    legend.add newTree(nnkIfStmt,
+               newTree(nnkElIfBranch, infix(brack, ">", 0.newLit),
+                       infix(newLit $status, "&", dollar(brack))),
+               newTree(nnkElse, newLit""))
+  result = newCall(report, combineLiterals(nestList(ident"&", legend)))
+
+proc postTest(test: Test): NimNode =
+  result = output(comment(testNumStyle & newLit($test.number)))
+
 proc compilerr(t: var Test): NimNode {.used.} =
   t.status = Oops
   result = newStmtList()
@@ -329,6 +344,7 @@ proc compilerr(t: var Test): NimNode {.used.} =
   result.add t.output(oopsStyle & newLit(t.name & ": compile failed"))
   result.add t.renderSource
   result.add t.setExitCode
+  result.add t.postTest
 
 proc skip*(msg = "skipped") =
   raise newException(SkipError, msg)
@@ -346,12 +362,13 @@ proc wrapExcept(t: var Test): NimNode =
   result = nnkTryStmt.newTree(t.n,
            nnkExceptBranch.newTree(infix(skipping, "as", e1), t.skipped(e1)),
            nnkExceptBranch.newTree(infix(assertion, "as", e2), t.badassert(e2)),
-           nnkExceptBranch.newTree(infix(catchall, "as", e3), t.exception(e3)))
+           nnkExceptBranch.newTree(infix(catchall, "as", e3), t.exception(e3)),
+           nnkFinally.newTree(t.postTest))
 
 proc makeTest(n: NimNode; name: string): Test =
   assert not n.isNil
-  result = Test(name: name, orig: n, number: testCount)
   inc testCount
+  result = Test(name: name, orig: n, number: testCount)
   let beuno {.used.} = genSym(nskLabel, "beuno")  # all good, bro
   let arrrg {.used.} = genSym(nskLabel, "arrrg")  # bad news, pal
 
@@ -368,6 +385,7 @@ proc makeTest(n: NimNode; name: string): Test =
       result.status = Okay
     # output the status in any event; otherwise there will be no output
     result.n.add result.output(newLit result.name)
+    dec testCount
 
   # wrap it into `when compiles(original): test else: compilerr`
   when not defined(release):
@@ -409,23 +427,8 @@ proc findName(n: NimNode; index: int): string =
   else:
     result = repr(n)
 
-proc reportResults(): NimNode =
-  var report = bindSym"report"
-  var results = bindSym"testResults"
-  var legend = newStmtList()
-  legend.add comment(resultsStyle & newLit($testCount & " tests  "))
-  for status in items(StatusKind):
-    legend.add newLit"  "
-    let brack = nnkBracketExpr.newTree(results, newLit status.ord)
-    legend.add newTree(nnkIfStmt,
-               newTree(nnkElIfBranch, infix(brack, ">", 0.newLit),
-                       infix(newLit $status, "&", dollar(brack))),
-               newTree(nnkElse, newLit""))
-  result = newCall(report, combineLiterals(nestList(ident"&", legend)))
-
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
-  inc depth
   try:
     result = newStmtList()
     for index, n in pairs(tests):
@@ -438,7 +441,6 @@ macro testes*(tests: untyped) =
         test = makeTest(n, name)
         result.add test.n
   finally:
-    dec depth
     result.add reportResults()
 
 when isMainModule:
