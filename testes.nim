@@ -290,11 +290,12 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
     result.add t.renderTrace(n)
   result.add t.setExitCode
 
-proc skipped(t: Test; n: NimNode): NimNode =
+proc skipped(t: var Test; n: NimNode): NimNode =
   assert not n.isNil
+  t.status = Skip
   result = newStmtList()
   result.add t.incResults
-  result.add t.output(infix(newLit("⚪ " & t.name & ": "), "&",
+  result.add t.output(infix(newLit(t.name & ": "), "&",
                             newDotExpr(n, ident"msg")))
 
 proc exception(t: var Test; n: NimNode): NimNode =
