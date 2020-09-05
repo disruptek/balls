@@ -66,6 +66,18 @@ type
 
   Styling = distinct string
 
+  Rewrite = proc(n: NimNode): NimNode
+
+proc rewrite*(n: NimNode; r: Rewrite): NimNode =
+  result = r(n)
+  if result.isNil:
+    result = copyNimNode n
+    for kid in items(n):
+      result.add rewrite(kid, r)
+    let second = r(result)
+    if not second.isNil:
+      result = second
+
 proc `&`(a, b: Styling): Styling {.borrow.}
 proc `&`(a: Styling; b: string): Styling = a & Styling(b)
 proc `&`(a: string; b: Styling): Styling = b & a
@@ -101,9 +113,35 @@ proc `$`(style: Styling): string =
       if result != resetStyle.string:
         result = resetStyle.string & result
 
+proc dollar(n: NimNode): NimNode =
+  ## If it's not a string literal, dollar it.
+  if n.kind == nnkStrLit:
+    result = n
+  elif n.kind == nnkCall and $n[0] in ["$", "&"]:
+    result = n
+  else:
+    result = newCall(ident"$", n)
+
+proc combineLiterals(n: NimNode): NimNode =
+  proc combiner(n: NimNode): NimNode =
+    case n.kind
+    of nnkCall:
+      case $n[0]
+      of "$":
+        if n[1].kind == nnkStrLit:
+          result = n[1]
+      of "&":
+        if len(n) == 3 and {n[1].kind, n[2].kind} == {nnkStrLit}:
+          result = newLit(n[1].strVal & n[2].strVal)
+      else:
+        discard
+    else:
+      discard
+  result = rewrite(n, combiner)
+
 proc `&`(style: Styling; n: NimNode): NimNode =
   let isAtty = bindSym"isAtty"
-  var n = newCall(ident"$", n)
+  var n = dollar(n)
   let text = newStmtList(newLit($style), n, newLit($resetStyle))
   result = nnkIfStmt.newNimNode(n)
   result.add nnkElifBranch.newTree(newCall(isAtty, ident"stdout"),
@@ -155,19 +193,17 @@ proc report(ss: varargs[string, `$`]) =
 proc output(n: NimNode): NimNode =
   assert not n.isNil
   let report = bindSym"report"
-  result = newCall(report, n)
+  result = newCall(report, combineLiterals(n))
 
 proc output(t: Test; n: NimNode): NimNode =
   assert not n.isNil
   let prefixer = bindSym"prefixLines"
-  result = output(newCall(prefixer,
-                          newCall(ident"$", n),
-                          newLit($t.status & " ")))
+  result = output(newCall(prefixer, dollar(n), newLit($t.status & " ")))
 
 proc output(test: Test; styling: Styling; n: NimNode): NimNode =
   assert not n.isNil
   let prefixer = bindSym"prefixLines"
-  result = newCall(prefixer, newCall(ident"$", n), newLit($test.status & " "))
+  result = newCall(prefixer, dollar(n), newLit($test.status & " "))
   result = test.output(styling & result)
 
 proc success(t: var Test): NimNode =
@@ -235,7 +271,7 @@ proc failure(t: var Test; n: NimNode = nil): NimNode =
 
 proc exceptionString(n: NimNode): NimNode =
   assert not n.isNil
-  result = infix(infix(newCall(ident"$", newDotExpr(n, ident"name")),
+  result = infix(infix(dollar(newDotExpr(n, ident"name")),
                        "&", ": ".newLit),
                  "&", newDotExpr(n, ident"msg"))
 
