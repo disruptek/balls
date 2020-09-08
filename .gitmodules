@@ -8,5 +8,5 @@
   branch = tag/1.8.22
 [submodule "grok"]
 	path = grok
-	url = git+ssh://git@github.com/disruptek/grok
+  url = https://github.com/disruptek/grok
 	branch = master
