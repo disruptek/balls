@@ -181,7 +181,15 @@ proc prefixLines(s: string; p: string): string =
 
 proc prefixLines(s: NimNode; p: string): NimNode =
   result = newStmtList()
-  for line in items(s):
+  var ss: NimNode
+  case s.kind
+  of nnkCommentStmt:
+    ss = newStmtList()
+    for line in items(splitLines(s.strVal, keepEol = true)):
+      ss.add line.newLit
+  else:
+    ss = s
+  for line in items(ss):
     result.add infix(p.newLit, "&", line)
   result = nestList(ident"&", result)
 
@@ -435,7 +443,9 @@ macro testes*(tests: untyped) =
       var n = n.rewriteTestBlock
       var test: Test
       if n.kind == nnkCommentStmt:
-        result.add output(comment(commentStyle & n.strVal.newLit))
+        let prefix = $lineNumStyle & "## " & $commentStyle
+        result.add output(infix(prefixLines(n, prefix),
+                                "&", newLit(resetStyle.string)))
       else:
         let name = findName(n, index)
         test = makeTest(n, name)
