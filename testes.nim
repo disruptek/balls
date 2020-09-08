@@ -1,3 +1,4 @@
+import std/times
 import std/os
 import std/sequtils
 import std/terminal
@@ -13,6 +14,10 @@ else:
     programResult = q
 
 import cutelog
+import grok/mem
+import grok/time
+
+import bytes2human
 
 export sugar, strutils, macros, cutelog
 
@@ -54,16 +59,22 @@ type
     Died = "💥"
     Oops = "⛔"
 
-  Test = object
-    status: StatusKind
-    orig: NimNode
-    n: NimNode
-    name: string
-    number: int
+  Test* = object
+    status*: StatusKind
+    orig*: NimNode
+    n*: NimNode
+    name*: string
+    number*: int
+    clock*: float
+    memory*: int
 
   Styling = distinct string
 
   Rewrite = proc(n: NimNode): NimNode
+
+var tests*: seq[Test]
+var clock: float
+var memory: int
 
 proc rewrite*(n: NimNode; r: Rewrite): NimNode =
   result = r(n)
@@ -342,10 +353,82 @@ proc reportResults(): NimNode =
                newTree(nnkElse, newLit""))
   result = newCall(report, combineLiterals(nestList(ident"&", legend)))
 
+proc composeColon(name: NimNode;
+                  value: int | enum | float | string | NimNode): NimNode =
+  let status = bindSym"StatusKind"
+  when value is int:
+    result = newColonExpr(name, newLit value)
+  elif value is StatusKind:
+    result = newColonExpr(name, newCall(status, newLit ord(value)))
+  elif value is float:
+    result = newColonExpr(name, newLit value)
+  elif value is string:
+    result = newColonExpr(name, newLit value)
+  elif value is ref:
+    result = newColonExpr(name, newNilLit())
+  else:
+    result = newEmptyNode()
+
+proc ctor(test: Test): NimNode =
+  ## copy compile-time Test into, uh, compile-time Test constructor
+  let typ = bindSym"Test"
+  result = nnkObjConstr.newTree(typ)
+  for name, value in fieldPairs(test):
+    when value isnot ref:
+      result.add composeColon(ident(name), value)
+
+proc pad(n: NimNode; size: int): NimNode =
+  let align = bindSym"align"
+  result = newCall(align, newCall(ident"$", n), size.newLit)
+
+proc humanize(n: NimNode): NimNode =
+  ## convert bytes to human-readable form
+  template abs(n: NimNode): NimNode = newCall(bindSym"abs", n)
+  let human = bindSym"bytes2human"
+  result = newTree(nnkIfExpr,
+                   newTree(nnkElifBranch, infix(n, ">", 0.newLit),
+                           infix(newLit"+", "&",
+                           newDotExpr(newCall(human, n), ident"short"))),
+                   newTree(nnkElifBranch, infix(n, "==", 0.newLit),
+                           newLit""),
+                   newTree(nnkElse, infix(newLit"-", "&",
+                           newDotExpr(newCall(human, abs n), ident"short"))))
+
 proc postTest(test: Test): NimNode =
-  result = output(comment(testNumStyle & newLit($test.number)))
+  ## run this after a test has completed
+  # create a test object
+  result = newStmtList()
+  let tests = bindSym"tests"
+  let temp = genSym(nskVar, "test")
+  let tempClock = newDotExpr(temp, ident"clock")
+  let tempMem = newDotExpr(temp, ident"memory")
+  result.add newVarStmt(temp, ctor(test))
+
+  # record the duration
+  result.add newAssignment(tempClock, infix(newCall(bindSym"epochTime"),
+                                            "-", bindSym"clock"))
+  # record the memory
+  let quiesce = newCall(bindSym"quiesceMemory", newLit"")
+  result.add newAssignment(tempMem, infix(quiesce, "-", bindSym"memory"))
+  # stash it in the sequence?
+  #result.add newCall(ident"add", tests, temp)
+
+  let newDur = bindSym"initDuration"
+  let nano = newCall(newDur, newTree(nnkExprEqExpr, ident"nanoseconds",
+                                     newCall(ident"int",  # convert it to int
+                                             infix(tempClock, "*", # nano/sec
+                                                   1_000_000_000.newLit))))
+  # compose the status line
+  var text = newStmtList()
+  text.add testNumStyle & pad(newLit($test.number), 5)
+  # the change in memory footprint after the test
+  text.add pad(humanize tempMem, 30)
+  # the short duration representing how long the test took
+  text.add pad(newCall(bindSym"shortDuration", nano), 20)
+  result.add output(comment(nestList(ident"&", text)))
 
 proc compilerr(t: var Test): NimNode {.used.} =
+  ## the compiler wasn't able to compile the test
   t.status = Oops
   result = newStmtList()
   result.add t.incResults
@@ -358,6 +441,7 @@ proc skip*(msg = "skipped") =
   raise newException(SkipError, msg)
 
 proc wrapExcept(t: var Test): NimNode =
+  ## compose a try/except/finally block around a test
   var skipping = bindSym"SkipError"
   when (NimMajor, NimMinor) >= (1, 3):
     var assertion = bindSym"AssertionDefect"
@@ -382,6 +466,10 @@ proc makeTest(n: NimNode; name: string): Test =
 
   result.n = copyNimTree(n).newStmtList
 
+  insert(result.n, 0, newAssignment(bindSym"memory",
+                                    newCall(bindSym"quiesceMemory", newLit"")))
+  insert(result.n, 0, newAssignment(bindSym"clock",
+                                    newCall(bindSym"epochTime")))
   if n.kind in testable:
     result.n.add result.success
 
