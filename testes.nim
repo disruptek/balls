@@ -466,10 +466,10 @@ proc makeTest(n: NimNode; name: string): Test =
 
   result.n = copyNimTree(n).newStmtList
 
-  insert(result.n, 0, newAssignment(bindSym"memory",
-                                    newCall(bindSym"quiesceMemory", newLit"")))
   insert(result.n, 0, newAssignment(bindSym"clock",
                                     newCall(bindSym"epochTime")))
+  insert(result.n, 0, newAssignment(bindSym"memory",
+                                    newCall(bindSym"quiesceMemory", newLit"")))
   if n.kind in testable:
     result.n.add result.success
 
