@@ -421,10 +421,11 @@ proc postTest(test: Test): NimNode =
   # compose the status line
   var text = newStmtList()
   text.add testNumStyle & pad(newLit($test.number), 5)
-  # the change in memory footprint after the test
-  text.add pad(humanize tempMem, 30)
-  # the short duration representing how long the test took
-  text.add pad(newCall(bindSym"shortDuration", nano), 20)
+  when defined(release):
+    # the change in memory footprint after the test
+    text.add pad(humanize tempMem, 30)
+    # the short duration representing how long the test took
+    text.add pad(newCall(bindSym"shortDuration", nano), 20)
   result.add output(comment(nestList(ident"&", text)))
 
 proc compilerr(t: var Test): NimNode {.used.} =
