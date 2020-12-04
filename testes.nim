@@ -59,24 +59,24 @@ type
     Died = "💥"
     Oops = "⛔"
 
-  Test* = object
-    status*: StatusKind
-    orig*: NimNode
-    n*: NimNode
-    name*: string
-    number*: int
-    clock*: float
-    memory*: int
+  Test = object
+    status: StatusKind
+    orig: NimNode
+    n: NimNode
+    name: string
+    number: int
+    clock: float
+    memory: int
 
   Styling = distinct string
 
   Rewrite = proc(n: NimNode): NimNode
 
-var tests*: seq[Test]
+var tests: seq[Test]
 var clock: float
 var memory: int
 
-proc rewrite*(n: NimNode; r: Rewrite): NimNode =
+proc rewrite(n: NimNode; r: Rewrite): NimNode =
   result = r(n)
   if result.isNil:
     result = copyNimNode n
