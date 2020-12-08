@@ -31,6 +31,8 @@ Because `testament` and `testutils` are going nowhere fast.
 
 ## Usage
 
+Here's a set of example tests which will pass (and fail) in interesting ways.
+
 ```nim
 import testes
 
@@ -104,6 +106,8 @@ testes:
   block explicit_failure:
     fail("this looks bad")
 ```
+
+Relax; your tests won't usually be this chaotic...  Right?  😉
 
 ![demonstration](docs/demo.svg "demonstration")
 
