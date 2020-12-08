@@ -100,6 +100,9 @@ testes:
     assert 2 != 4 div 2
 
   assert "any statement is a test" != ""
+
+  block explicit_failure:
+    fail("this looks bad")
 ```
 
 ![demonstration](docs/demo.svg "demonstration")
