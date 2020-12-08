@@ -46,3 +46,6 @@ testes:
     skip("i just don't wanna")
 
   assert "any statement is a test" != ""
+  
+  expect OSError:
+    raise newException(OSError, "shoulda been caught!")
