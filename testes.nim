@@ -523,6 +523,10 @@ proc findName(n: NimNode; index: int): string =
       repr(n)
   else:
     result = repr(n)
+ 
+# windows cmd / powershell color support
+when defined(windows):
+  discard execShellCmd("")
 
 macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
