@@ -318,7 +318,6 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   else:
     let text = newStmtList(t.name.newLit, newLit(": "), n.dotMsg)
     result.add t.output(failureStyle & nestList(ident"&", text))
-    result.add t.renderTrace(n)
   result.add t.setExitCode
 
 proc skipped(t: var Test; n: NimNode): NimNode =
