@@ -10,6 +10,7 @@ import std/colors
 when (NimMajor, NimMinor) >= (1, 3):
   import std/exitprocs
 else:
+  type AssertionDefect = AssertionError
   proc setProgramResult(q: int) =
     programResult = q
 
@@ -444,10 +445,7 @@ proc skip*(msg = "skipped") =
 proc wrapExcept(t: var Test): NimNode =
   ## compose a try/except/finally block around a test
   var skipping = bindSym"SkipError"
-  when (NimMajor, NimMinor) >= (1, 3):
-    var assertion = bindSym"AssertionDefect"
-  else:
-    var assertion = bindSym"AssertionError"
+  var assertion = bindSym"AssertionDefect"
   var catchall = bindSym"Exception"
   var e1 {.used.} = genSym(nskLet, "e")
   var e2 {.used.} = genSym(nskLet, "e")
