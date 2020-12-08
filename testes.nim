@@ -51,6 +51,7 @@ const
   }
 
 type
+  FailError = object of CatchableError
   SkipError = object of CatchableError
   StatusKind = enum
     None = "  "
@@ -442,17 +443,25 @@ proc compilerr(t: var Test): NimNode {.used.} =
   result.add t.postTest
 
 proc skip*(msg = "skipped") =
+  ## Manually skips the remainder of the current test.
   raise newException(SkipError, msg)
+
+proc fail*(msg = "failed") =
+  ## Manually fails the current test.
+  raise newException(FailError, msg)
 
 proc wrapExcept(t: var Test): NimNode =
   ## compose a try/except/finally block around a test
   var skipping = bindSym"SkipError"
+  var failing = bindSym"FailError"
   var assertion = bindSym"AssertionDefect"
   var catchall = bindSym"Exception"
   var e1 {.used.} = genSym(nskLet, "e")
   var e2 {.used.} = genSym(nskLet, "e")
   var e3 {.used.} = genSym(nskLet, "e")
+  var e4 {.used.} = genSym(nskLet, "e")
   result = nnkTryStmt.newTree(t.n,
+           nnkExceptBranch.newTree(infix(failing, "as", e4), t.badassert(e4)),
            nnkExceptBranch.newTree(infix(skipping, "as", e1), t.skipped(e1)),
            nnkExceptBranch.newTree(infix(assertion, "as", e2), t.badassert(e2)),
            nnkExceptBranch.newTree(infix(catchall, "as", e3), t.exception(e3)),

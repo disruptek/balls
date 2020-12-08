@@ -76,3 +76,6 @@ testes:
     skip("i just don't wanna")
 
   assert "any statement is a test" != ""
+
+  block explicit_failure:
+    fail("this looks bad")
