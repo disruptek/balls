@@ -19,7 +19,7 @@ import grok/time
 
 import bytes2human
 
-export sugar, strutils, macros, cutelog
+export sugar, strutils, macros, cutelog, execShellCmd
 
 const
   statements = {
