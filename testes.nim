@@ -531,8 +531,7 @@ macro testes*(tests: untyped) =
 
     # windows cmd / powershell color support
     when defined(windows):
-      result.add nnkDiscardStmt.newTree:
-        newCall(ident"execShellCmd", newLit"")
+      result.add(nnkDiscardStmt.newTree newCall(ident"execShellCmd", newLit""))
 
     for index, n in pairs(tests):
       var n = n.rewriteTestBlock
