@@ -53,6 +53,7 @@ const
 type
   FailError = object of CatchableError
   SkipError = object of CatchableError
+  ExpectExceptionDefect = object of Defect
   StatusKind = enum
     None = "  "
     Info = "🔵"
@@ -554,6 +555,17 @@ macro testes*(tests: untyped) =
         result.add test.n
   finally:
     result.add reportResults()
+
+template expect*(errType, body: untyped): untyped =
+    try:
+        body
+        raise newException(ExpectExceptionDefect, 
+            "expected " & $errType)
+    except errType:
+        discard
+    except CatchableError as err:
+        raise newException(ExpectExceptionDefect, 
+            "expected " & $errType & " but caught " & $err.name)
 
 when isMainModule:
   import std/options
