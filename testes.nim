@@ -19,7 +19,7 @@ import grok/time
 
 import bytes2human
 
-export sugar, strutils, macros, cutelog
+export sugar, strutils, macros, cutelog, execShellCmd
 
 const
   statements = {
@@ -528,6 +528,11 @@ macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
   try:
     result = newStmtList()
+    
+    # windows cmd / powershell color support
+    when defined(windows):
+      result.add newTree(nnkDiscardStmt, newCall("execShellCmd", newLit("")))
+    
     for index, n in pairs(tests):
       var n = n.rewriteTestBlock
       var test: Test
