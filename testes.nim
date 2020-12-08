@@ -10,7 +10,9 @@ import std/colors
 when (NimMajor, NimMinor) >= (1, 3):
   import std/exitprocs
 else:
-  type AssertionDefect = AssertionError
+  # the is the best solution to --useVersion:1.0 i guess...
+  when not compiles(AssertionDefect):
+    type AssertionDefect = AssertionError
   proc setProgramResult(q: int) =
     programResult = q
 
@@ -526,11 +528,12 @@ macro testes*(tests: untyped) =
   ## for a good time, put your tests in `block:` underneath the `testes`
   try:
     result = newStmtList()
-    
+
     # windows cmd / powershell color support
     when defined(windows):
-      result.add newTree(nnkDiscardStmt, newCall("execShellCmd", newLit("")))
-    
+      result.add nnkDiscardStmt.newTree:
+        newCall(ident"execShellCmd", newLit"")
+
     for index, n in pairs(tests):
       var n = n.rewriteTestBlock
       var test: Test
