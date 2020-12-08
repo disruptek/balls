@@ -79,3 +79,10 @@ testes:
 
   block explicit_failure:
     fail("this looks bad")
+    
+  expect OSError:
+    raise newException(OSError, "shoulda been caught!")
+    
+  expect OSError:
+    discard 
+    # ExpectExceptionDefect will be raised becase no OSError was raised
