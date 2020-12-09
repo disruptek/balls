@@ -33,5 +33,5 @@ proc execTest(test: string) =
 task test, "run tests for ci":
   execTest("tests/testicles.nim")
 
-task docs, "generate some docs":
-  exec "termtosvg docs/demo.svg --loop-delay=10000 --screen-geometry=80x70 --template=window_frame_powershell --command=\"nim c -r tests/balls.nim\""
+task demo, "produce a demo":
+  exec """demo docs/demo.svg "nim c --gc:arc --out=\$1 tests/balls.nim""""
