@@ -2,7 +2,6 @@ import std/times
 import std/os
 import std/sequtils
 import std/terminal
-import std/sugar
 import std/strutils
 import std/macros
 import std/colors
@@ -10,19 +9,19 @@ import std/colors
 when (NimMajor, NimMinor) >= (1, 3):
   import std/exitprocs
 else:
-  # the is the best solution to --useVersion:1.0 i guess...
+  # this is the best solution to --useVersion:1.0 i guess...
   when not compiles(AssertionDefect):
     type AssertionDefect = AssertionError
   proc setProgramResult(q: int) =
     programResult = q
 
-import cutelog
 import grok/mem
 import grok/time
 
 import bytes2human
 
-export sugar, strutils, macros, cutelog, execShellCmd
+when defined(windows):
+  export execShellCmd
 
 const
   statements = {
@@ -554,23 +553,6 @@ macro testes*(tests: untyped) =
         result.add test.n
   finally:
     result.add reportResults()
-
-when isMainModule:
-  import std/options
-
-  import bump
-  import cligen
-
-  let
-    logger = newCuteConsoleLogger()
-  addHandler(logger)
-
-  const
-    release = projectVersion()
-  if release.isSome:
-    clCfg.version = $release.get
-  else:
-    clCfg.version = "(unknown version)"
 
 when false:
   proc massageLabel(n: NimNode): NimNode =
