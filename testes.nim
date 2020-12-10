@@ -420,15 +420,15 @@ proc postTest(test: Test): NimNode =
                                      newCall(ident"int",  # convert it to int
                                              infix(tempClock, "*", # nano/sec
                                                    1_000_000_000.newLit))))
-  # compose the status line
-  var text = newStmtList()
-  text.add testNumStyle & pad(newLit($test.number), 5)
   when defined(release):
+    # compose the status line
+    var text = newStmtList()
+    text.add testNumStyle & pad(newLit($test.number), 5)
     # the change in memory footprint after the test
     text.add pad(humanize tempMem, 30)
     # the short duration representing how long the test took
     text.add pad(newCall(bindSym"shortDuration", nano), 20)
-  result.add output(comment(nestList(ident"&", text)))
+    result.add output(comment(nestList(ident"&", text)))
 
 proc compilerr(t: var Test): NimNode {.used.} =
   ## the compiler wasn't able to compile the test
