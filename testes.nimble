@@ -35,3 +35,4 @@ task test, "run tests for ci":
 
 task demo, "produce a demo":
   exec """demo docs/demo.svg "nim c --out=\$1 tests/balls.nim" solarized_light"""
+  exec """demo docs/clean.svg "nim c --define:danger --out=\$1 tests/testicles.nim" solarized_light"""

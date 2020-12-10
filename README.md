@@ -110,6 +110,11 @@ Relax; your tests won't usually be this chaotic...  Right?  😉
 
 ![demonstration](docs/demo.svg "demonstration")
 
+Here's a similar demo with `--define:danger` enabled to show the
+performance metrics; no failing tests are permitted in such a build.
+
+![performance](docs/clean.svg "performance")
+
 ## Documentation
 See [the documentation for the testes module](https://disruptek.github.io/testes/testes.html) as generated directly from the source.
 
