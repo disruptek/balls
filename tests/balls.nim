@@ -24,7 +24,7 @@ testes:
     ## this block exists only to test inclusion of
     ## comments in the test code display...
     check r == 3
-    dump r
+    echo r
 
   block:
     ## check a list of statements in a block
