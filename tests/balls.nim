@@ -14,6 +14,7 @@ testes:
 
   block sometimes_the_wolf_is_nice:
     assert true
+    check true, "that wolf is very nice"
     inc r
 
   block sheepies:
@@ -79,3 +80,7 @@ testes:
 
   block explicit_failure:
     fail("this looks bad")
+
+  block check_with_message:
+    let x = 0
+    check "".len < x, "empty strings are STILL too long"

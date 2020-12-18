@@ -8,9 +8,11 @@ import std/colors
 
 when (NimMajor, NimMinor) >= (1, 3):
   import std/exitprocs
+  const hasDefects = true
 else:
   # this is the best solution to --useVersion:1.0 i guess...
-  when not compiles(AssertionDefect):
+  const hasDefects = compiles(AssertionDefect)
+  when not hasDefects:
     type AssertionDefect = AssertionError
   proc setProgramResult(q: int) =
     programResult = q
@@ -172,19 +174,35 @@ var testCount {.compileTime}: int
 var testResults = newSeq[int](1 + ord(high StatusKind))
 
 proc incResults(test: Test): NimNode =
-  newCall(ident"inc", newTree(nnkBracketExpr,
-                              bindSym"testResults",
-                              newLit test.status.ord))
+  newCall ident"inc":
+    nnkBracketExpr.newTree(bindSym"testResults", newLit test.status.ord)
 
-macro check*(body: untyped) =
-  ## Check one or more statements (in a block); equivalent to `assert`.
-  let assert = bindSym"assert"
+proc checkOne(condition: NimNode; message = ""): NimNode =
+  ## generate a simple check statement with optional exception message
+  let assertion =
+    when hasDefects:
+      ident"AssertionDefect"
+    else:
+      ident"AssertionError"
+  var message =
+    if message == "":
+      condition.repr
+    else:
+      message
+  var clause = nnkRaiseStmt.newTree:
+    newCall(ident"newException", assertion, newLit message)
+  result = newIfStmt (newCall(ident"not", condition), clause)
+
+macro check*(body: untyped; message = "") =
+  ## Check one or more expressions (in a block); raises an AssertionDefect
+  ## in the event that the expression is `false` regardless of `assertions`
+  ## settings.  Optionally specify a custom message a la `assert`.
   if body.kind == nnkStmtList:
     result = newStmtList()
-    for child in items(body):
-      result.add newCall(assert, child)
+    for child in body.items:
+      result.add: checkOne(child, message.strVal)
   else:
-    result = newCall(assert, body)
+    result = checkOne(body, message.strVal)
 
 proc `status=`(t: var Test; s: StatusKind) =
   system.`=`(t.status, max(t.status, s))

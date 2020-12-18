@@ -14,6 +14,7 @@ testes:
 
   block sometimes_the_wolf_is_nice:
     assert true
+    check true, "that wolf is very nice"
     inc r
 
   block:
