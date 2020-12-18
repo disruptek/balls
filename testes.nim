@@ -550,7 +550,9 @@ proc findName(n: NimNode; index: int): string =
     result = repr(n)
 
 macro testes*(tests: untyped) =
-  ## for a good time, put your tests in `block:` underneath the `testes`
+  ## For a good time, put each test in a `block:` underneath the `testes`.
+  ## You can specify test names using `##` comment statements, or block
+  ## syntax like that of `unittests`: `test "my test name": assert true`
   try:
     result = newStmtList()
 
