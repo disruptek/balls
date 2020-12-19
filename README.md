@@ -101,9 +101,14 @@ testes:
     assert 2 != 4 div 2
 
   assert "any statement is a test" != ""
+  check r > 0, $r & " is a good test of dynamic messages"
 
   block explicit_failure:
     fail("this looks bad")
+
+  block check_with_message:
+    let x = 0
+    check "".len < x, "empty strings are STILL too long"
 ```
 
 Relax; your tests won't usually be this chaotic...  Right?  😉

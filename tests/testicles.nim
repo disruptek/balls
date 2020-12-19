@@ -31,7 +31,7 @@ testes:
       r > 3
 
   inc r
-  assert r > 0
+  check r > 0
   ## this is a nice comment
   type TypesAreNotTests = bool
   ## there's really nothing else to say
@@ -47,3 +47,4 @@ testes:
     skip("i just don't wanna")
 
   assert "any statement is a test" != ""
+  check r > 0, $r & " is a good test of dynamic messages"

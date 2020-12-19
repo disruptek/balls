@@ -77,6 +77,7 @@ testes:
     skip("i just don't wanna")
 
   assert "any statement is a test" != ""
+  check r > 0, $r & " is a good test of dynamic messages"
 
   block explicit_failure:
     fail("this looks bad")

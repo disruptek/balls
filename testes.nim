@@ -182,7 +182,7 @@ proc incResults(test: Test): NimNode =
   newCall ident"inc":
     nnkBracketExpr.newTree(bindSym"testResults", newLit test.status.ord)
 
-proc checkOne(condition: NimNode; message = ""): NimNode =
+proc checkOne(condition: NimNode; message: NimNode): NimNode =
   ## generate a simple check statement with optional exception message
   let assertion =
     when hasDefects:
@@ -190,12 +190,12 @@ proc checkOne(condition: NimNode; message = ""): NimNode =
     else:
       ident"AssertionError"
   var message =
-    if message == "":
-      condition.repr
+    if message.kind == nnkStrLit and message.strVal == "":
+      newLit condition.repr
     else:
       message
   var clause = nnkRaiseStmt.newTree:
-    newCall(ident"newException", assertion, newLit message)
+    newCall(ident"newException", assertion, message)
   result = newIfStmt (newCall(ident"not", condition), clause)
 
 macro check*(body: untyped; message = "") =
@@ -205,9 +205,9 @@ macro check*(body: untyped; message = "") =
   if body.kind == nnkStmtList:
     result = newStmtList()
     for child in body.items:
-      result.add: checkOne(child, message.strVal)
+      result.add: checkOne(child, message)
   else:
-    result = checkOne(body, message.strVal)
+    result = checkOne(body, message)
 
 proc `status=`(t: var Test; s: StatusKind) =
   system.`=`(t.status, max(t.status, s))
