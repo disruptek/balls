@@ -241,7 +241,8 @@ proc numberLines(s: string; first = 1): NimNode =
     ln = infix(ln, "&", sourceStyle & line.newLit)
     result.add ln
 
-proc report(ss: varargs[string, `$`]) =
+proc report*(ss: varargs[string, `$`]) =
+  ## Like `echo`, but outputs to `stderr` with the other test output.
   writeLine(stderr, ss)
 
 proc output(n: NimNode): NimNode =
