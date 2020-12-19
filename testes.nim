@@ -56,32 +56,33 @@ type
   SkipError = object of CatchableError
   StatusKind = enum
     None = "  "
-    Info = "🔵"
-    Okay = "🟢"
-    Skip = "❔"
-    Part = "🟡"
-    Fail = "🔴"
-    Died = "💥"
-    Oops = "⛔"
+    Info = "🔵"          ## may prefix information
+    Okay = "🟢"          ## total success
+    Skip = "❔"          ## test was skipped
+    Part = "🟡"          ## partial success
+    Fail = "🔴"          ## assertion failure
+    Died = "💥"          ## unexpected exception
+    Oops = "⛔"          ## compiles() failed
 
   Test = object
-    status: StatusKind
-    orig: NimNode
-    n: NimNode
-    name: string
-    number: int
-    clock: float
-    memory: int
+    status: StatusKind    ## the result of the test
+    orig: NimNode         ## the user's original code
+    n: NimNode            ## the test and its instrumentation
+    name: string          ## the name of the test, duh
+    number: int           ## tests tend to get unique numbers
+    clock: float          ## used to measure test timing
+    memory: int           ## used to measure test memory
 
   Styling = distinct string
 
   Rewrite = proc(n: NimNode): NimNode
 
-var tests: seq[Test]
-var clock: float
-var memory: int
+var tests: seq[Test]      ## all the tests
+var clock: float          ## pre-test time
+var memory: int           ## pre-test memory
 
 proc rewrite(n: NimNode; r: Rewrite): NimNode =
+  ## perform a recursive rewrite (at least once) using the given mutator
   result = r(n)
   if result.isNil:
     result = copyNimNode n
@@ -142,6 +143,7 @@ proc dollar(n: NimNode): NimNode =
     result = newCall(ident"$", n)
 
 proc combineLiterals(n: NimNode): NimNode =
+  ## merges "foo" & "bar" into "foobar"
   proc combiner(n: NimNode): NimNode =
     case n.kind
     of nnkCall:
@@ -159,6 +161,8 @@ proc combineLiterals(n: NimNode): NimNode =
   result = rewrite(n, combiner)
 
 proc `&`(style: Styling; n: NimNode): NimNode =
+  ## combine style and something $able, but only output the
+  ## style if you find that the program is on a tty at runtime
   let isAtty = bindSym"isAtty"
   var n = dollar(n)
   let text = newStmtList(newLit($style), n, newLit($resetStyle))
@@ -168,10 +172,11 @@ proc `&`(style: Styling; n: NimNode): NimNode =
   result.add nnkElse.newTree(n)
 
 proc comment(n: NimNode): NimNode =
+  ## render a comment with the given stringish node
   result = infix(lineNumStyle & newLit"## ", "&", n)
 
-var testCount {.compileTime}: int
-var testResults = newSeq[int](1 + ord(high StatusKind))
+var testCount {.compileTime.}: int                       ## whatfer counting!
+var testResults = newSeq[int](1 + ord(high StatusKind))  ## result totals
 
 proc incResults(test: Test): NimNode =
   newCall ident"inc":
@@ -208,10 +213,12 @@ proc `status=`(t: var Test; s: StatusKind) =
   system.`=`(t.status, max(t.status, s))
 
 proc prefixLines(s: string; p: string): string =
+  ## prefix each line of multiline input with the given string
   for line in items(splitLines(s, keepEol = true)):
     result.add p & line
 
 proc prefixLines(s: NimNode; p: string): NimNode =
+  ## prefix each line of multiline input with the given string
   result = newStmtList()
   var ss: NimNode
   case s.kind
@@ -226,6 +233,7 @@ proc prefixLines(s: NimNode; p: string): NimNode =
   result = nestList(ident"&", result)
 
 proc numberLines(s: string; first = 1): NimNode =
+  ## prefix each line of multiline input with a rendered line number
   result = newStmtList()
   for n, line in pairs(splitLines(s, keepEol = true)):
     var ln = lineNumStyle & align($(n + first), 3).newLit
@@ -253,6 +261,7 @@ proc output(test: Test; styling: Styling; n: NimNode): NimNode =
   result = test.output(styling & result)
 
 proc success(t: var Test): NimNode =
+  ## what to do when a test is successful
   t.status = Okay
   result = newStmtList()
   result.add t.incResults
@@ -269,6 +278,7 @@ proc findWhere(s: string; p: string; into: var string): bool {.used.} =
     into = spaces(s.find(p))
 
 proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
+  ## stylishly render a stack trace
   var path = getCurrentDir()
   var cf: string
   var result: seq[string]
@@ -284,6 +294,7 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
   report result.join("\n").prefixLines prefix & " 🗇 "
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
+  ## output the stack trace of a test, and perhaps that of any exception
   var renderStack = bindSym"renderStack"
   var getStack = newCall(ident"getStackTraceEntries")
   if not n.isNil:
@@ -308,6 +319,7 @@ proc setExitCode(t: Test; code = QuitFailure): NimNode =
                       newCall(setResult, code.newLit)))
 
 proc failure(t: var Test; n: NimNode = nil): NimNode =
+  ## what to do when a test fails
   t.status = Fail
   result = newStmtList()
   result.add t.incResults
@@ -317,9 +329,11 @@ proc failure(t: var Test; n: NimNode = nil): NimNode =
   result.add t.setExitCode
 
 proc dotMsg(n: NimNode): NimNode =
+  ## render an exception's .msg field
   result = commentStyle & newDotExpr(n, ident"msg")
 
 proc exceptionString(n: NimNode): NimNode =
+  ## render an exception with name and message
   assert not n.isNil
   result = infix(infix(dollar(newDotExpr(n, ident"name")),
                        "&", ": ".newLit), "&", n.dotMsg)
@@ -338,6 +352,7 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   result.add t.setExitCode
 
 proc skipped(t: var Test; n: NimNode): NimNode =
+  ## what to do when a test is skipped
   assert not n.isNil
   t.status = Skip
   result = newStmtList()
@@ -349,6 +364,7 @@ proc skipped(t: var Test; n: NimNode): NimNode =
   result.add t.output(nestList(ident"&", text))
 
 proc exception(t: var Test; n: NimNode): NimNode =
+  ## what to do when a test raises an exception
   assert not n.isNil
   t.status = Died
   let text = newStmtList(newLit(t.name & ": "), n.exceptionString)
@@ -360,6 +376,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
   result.add t.setExitCode
 
 proc reportResults(): NimNode =
+  ## produce a small legend showing result totals
   var report = bindSym"report"
   var results = bindSym"testResults"
   var legend = newStmtList()
@@ -416,7 +433,6 @@ proc humanize(n: NimNode): NimNode =
 
 proc postTest(test: Test): NimNode =
   ## run this after a test has completed
-  # create a test object
   result = newStmtList()
   let tests = bindSym"tests"
   let temp = genSym(nskVar, "test")
@@ -484,32 +500,53 @@ proc wrapExcept(t: var Test): NimNode =
            nnkFinally.newTree(t.postTest))
 
 proc makeTest(n: NimNode; name: string): Test =
+  ## we're given `n`, which is a block: or something, and a test name.
+  ## we compose a test that performs timings, measures memory, catches
+  ## exceptions, and reports compilation failures.
   assert not n.isNil
+  # the test counter is used to, uh, count tests
   inc testCount
+  # this is our test object; note that `Test.n` hasn't been added yet
   result = Test(name: name, orig: n, number: testCount)
-  let beuno {.used.} = genSym(nskLabel, "beuno")  # all good, bro
-  let arrrg {.used.} = genSym(nskLabel, "arrrg")  # bad news, pal
+  #let beuno {.used.} = genSym(nskLabel, "beuno")  # all good, bro
+  #let arrrg {.used.} = genSym(nskLabel, "arrrg")  # bad news, pal
 
+  # we've stored the original code in the Test object, so now we
+  # copy the input and put it into a new statement list; `n` will
+  # hold the code that we'll actually run to instrument the test
   result.n = copyNimTree(n).newStmtList
 
-  insert(result.n, 0, newAssignment(bindSym"clock",
-                                    newCall(bindSym"epochTime")))
-  insert(result.n, 0, newAssignment(bindSym"memory",
-                                    newCall(bindSym"quiesceMemory", newLit"")))
+  # if the input ast is testable,
   if n.kind in testable:
+    # we will add a "success" event to the bottom of our instrumentation
     result.n.add result.success
 
-    # wrap it to catch any exceptions
+    # make note of the global clock time at the beginning of the test
+    insert(result.n, 0, newAssignment(bindSym"clock",
+                                      newCall(bindSym"epochTime")))
+
+    # but first perform a garbage collection or whatever, so our
+    # memory figures might be kinda sorta useful, and store it globally
+    insert(result.n, 0, newAssignment(bindSym"memory",
+                                      newCall(bindSym"quiesceMemory",
+                                              newLit"")))
+
+    # wrap all the instrumentation to catch any exceptions
     result.n = result.wrapExcept
+
   else:
     # it's not testable; we'll indicate that it worked (what else?)
     when defined(release):
       result.status = Okay
+
     # output the status in any event; otherwise there will be no output
     result.n.add result.output(newLit result.name)
+
+    # a test that wasn't actually testable doesn't deserve a counter
     dec testCount
 
   # wrap it into `when compiles(original): test else: compilerr`
+  # this'll allow tests that don't compile to produce useful output
   when not defined(release):
     result.n = nnkWhenStmt.newTree(
       nnkElifBranch.newTree(
@@ -574,6 +611,7 @@ macro testes*(tests: untyped) =
   finally:
     result.add reportResults()
 
+# unused code that may move back into service
 when false:
   proc massageLabel(n: NimNode): NimNode =
     assert not n.isNil
