@@ -248,14 +248,14 @@ proc numberLines(s: string; first = 1): NimNode =
     ln = infix(ln, "&", sourceStyle & line.newLit)
     result.add ln
 
-proc report*(ss: varargs[string, `$`]) =
+proc checkpoint*(ss: varargs[string, `$`]) =
   ## Like `echo`, but outputs to `stderr` with the other test output.
   writeLine(stderr, ss)
 
 proc output(n: NimNode): NimNode =
   assert not n.isNil
-  let report = bindSym"report"
-  result = newCall(report, combineLiterals(n))
+  let checkpoint = bindSym"checkpoint"
+  result = newCall(checkpoint, combineLiterals(n))
 
 proc output(t: Test; n: NimNode): NimNode =
   assert not n.isNil
@@ -267,6 +267,27 @@ proc output(test: Test; styling: Styling; n: NimNode): NimNode {.used.} =
   let prefixer = bindSym"prefixLines"
   result = newCall(prefixer, dollar(n), newLit($test.status & " "))
   result = test.output(styling & result)
+
+proc report(n: NimNode): NimNode =
+  ## render a multi-line comment
+  let prefix = $lineNumStyle & "## " & $commentStyle
+  result = output(infix(prefixLines(n, prefix),
+                  "&", newLit(resetStyle.string)))
+
+macro report*(ss: varargs[typed]) =
+  ## Like `checkpoint`, but rendered as a comment.
+  ## You can supply AST here to be typed and rendered via `treeRepr`.
+  var s: string
+  for index, value in ss.pairs:
+    if value.kind == nnkStrLit:
+      s.add value.strVal & " "
+    else:
+      s.add "\n" & value.treeRepr
+  result =
+    if s == "":
+      newEmptyNode()
+    else:
+      report newCommentStmtNode(s)
 
 proc success(t: var Test): NimNode =
   ## what to do when a test is successful
@@ -299,7 +320,7 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
     let line = align($s.line, 5)
     result.add "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle,
       line, code, $s.procname, $lineNumStyle, $sourceStyle, $viaProcStyle ]
-  report result.join("\n").prefixLines prefix & " 🗇 "
+  checkpoint result.join("\n").prefixLines prefix & " 🗇 "
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
   ## output the stack trace of a test, and perhaps that of any exception
@@ -385,7 +406,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
 
 proc reportResults(): NimNode =
   ## produce a small legend showing result totals
-  var report = bindSym"report"
+  var checkpoint = bindSym"checkpoint"
   var results = bindSym"testResults"
   var legend = newStmtList()
   legend.add comment(resultsStyle & newLit($testCount & " tests  "))
@@ -396,7 +417,7 @@ proc reportResults(): NimNode =
                newTree(nnkElIfBranch, infix(brack, ">", 0.newLit),
                        infix(newLit $status, "&", dollar(brack))),
                newTree(nnkElse, newLit""))
-  result = newCall(report, combineLiterals(nestList(ident"&", legend)))
+  result = newCall(checkpoint, combineLiterals(nestList(ident"&", legend)))
 
 proc composeColon(name: NimNode;
                   value: int | enum | float | string | NimNode): NimNode =

@@ -48,3 +48,6 @@ testes:
 
   assert "any statement is a test" != ""
   check r > 0, $r & " is a good test of dynamic messages"
+
+  report "report for expression expansion:", r != 5
+  checkpoint "but checkpoint behaves as it does in unittest: ", r == 5

@@ -61,6 +61,7 @@ testes:
 
   block sometimes_the_wolf_is_nice:
     assert true
+    check true, "that wolf is very nice"
     inc r
 
   block sheepies:
@@ -74,6 +75,12 @@ testes:
     echo r
 
   block:
+    ## check a list of statements in a block
+    check:
+      r < 5
+      r > 3
+
+  block:
     ## unnamed block
     discard
 
@@ -82,7 +89,9 @@ testes:
 
   inc r
   assert r > 0
+  ## this is a nice comment
   type TypesAreNotTests = bool
+  ## there's really nothing else to say
   const VariablesDefinedOutsideBlocksAreNotTests = true
 
   test "a test: block is fine":
@@ -111,8 +120,14 @@ testes:
     assert 2 == 4 div 2
     assert 2 != 4 div 2
 
+  block omitted:
+    skip("i just don't wanna")
+
   assert "any statement is a test" != ""
   check r > 0, $r & " is a good test of dynamic messages"
+
+  report "report for expression expansion:", r != 5
+  checkpoint "but checkpoint behaves as it does in unittest: ", r == 5
 
   block explicit_failure:
     fail("this looks bad")
