@@ -29,7 +29,18 @@ Because `testament` and `testutils` are going nowhere fast.
 
 - With `--define:release`, _all code_ **must** compile.
 
-## Usage
+## Test Runner Usage
+
+You can now run `testes` to run a limited local test matrix against the current
+compiler -- the matrix is expanded automatically on GitHub Actions CI.  This
+runtime will simply build and invoke any `t*.nim` found beneath the `tests`
+subdirectory.
+
+```
+$ testes
+```
+
+## Test Library Usage
 
 Here's a set of example tests which will pass (and fail) in interesting ways.
 
