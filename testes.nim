@@ -20,13 +20,15 @@ else:
 import grok/mem
 import grok/time
 
-import bytes2human
+when defined(release):
+  # we only need this for release tests
+  import bytes2human
 
 when defined(windows):
   export execShellCmd
 
 const
-  statements = {
+  statements {.used.} = {
     # these are not r-values
 
     nnkBlockStmt, nnkStmtList, nnkIfStmt, nnkWhileStmt, nnkVarSection,
@@ -77,7 +79,8 @@ type
 
   Rewrite = proc(n: NimNode): NimNode
 
-var tests: seq[Test]      ## all the tests
+when false:
+  var tests: seq[Test]      ## all the tests
 var clock: float          ## pre-test time
 var memory: int           ## pre-test memory
 
@@ -96,10 +99,10 @@ proc `&`(a, b: Styling): Styling {.borrow.}
 proc `&`(a: Styling; b: string): Styling = a & Styling(b)
 proc `&`(a: string; b: Styling): Styling = b & a
 
+{.push hint[ConvFromXtoItselfNotNeeded]: off.}
+
 const
   resetStyle      = Styling ansiResetCode
-  testNumStyle    = Styling ansiStyleCode(styleItalic) &
-                    Styling ansiForegroundColorCode(fgYellow, true)
   resultsStyle    = Styling ansiStyleCode(styleItalic) &
                     Styling ansiForegroundColorCode(fgWhite, true)
   commentStyle    = Styling ansiStyleCode(styleItalic) &
@@ -121,6 +124,10 @@ const
   viaFileStyle    = Styling ansiStyleCode(styleItalic) &
                     Styling ansiStyleCode(styleUnderscore) &
                     Styling ansiForegroundColorCode(fgBlue, true)
+when defined(release): # avoid unused warnings
+  const
+    testNumStyle  = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiForegroundColorCode(fgYellow, true)
 
 proc `$`(style: Styling): string =
   when nimvm:
@@ -209,7 +216,7 @@ macro check*(body: untyped; message = "") =
   else:
     result = checkOne(body, message)
 
-proc `status=`(t: var Test; s: StatusKind) =
+proc `status=`(t: var Test; s: StatusKind) {.used.} =
   system.`=`(t.status, max(t.status, s))
 
 proc prefixLines(s: string; p: string): string =
@@ -253,9 +260,9 @@ proc output(n: NimNode): NimNode =
 proc output(t: Test; n: NimNode): NimNode =
   assert not n.isNil
   let prefixer = bindSym"prefixLines"
-  result = output(newCall(prefixer, dollar(n), newLit($t.status & " ")))
+  result = output newCall(prefixer, dollar(n), newLit($t.status & " "))
 
-proc output(test: Test; styling: Styling; n: NimNode): NimNode =
+proc output(test: Test; styling: Styling; n: NimNode): NimNode {.used.} =
   assert not n.isNil
   let prefixer = bindSym"prefixLines"
   result = newCall(prefixer, dollar(n), newLit($test.status & " "))
@@ -319,7 +326,7 @@ proc setExitCode(t: Test; code = QuitFailure): NimNode =
   result = newIfStmt((prefix(newCall(isAtty, ident"stdout"), "not"),
                       newCall(setResult, code.newLit)))
 
-proc failure(t: var Test; n: NimNode = nil): NimNode =
+proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
   ## what to do when a test fails
   t.status = Fail
   result = newStmtList()
@@ -393,10 +400,10 @@ proc reportResults(): NimNode =
 
 proc composeColon(name: NimNode;
                   value: int | enum | float | string | NimNode): NimNode =
-  let status = bindSym"StatusKind"
   when value is int:
     result = newColonExpr(name, newLit value)
   elif value is StatusKind:
+    let status = bindSym"StatusKind"
     result = newColonExpr(name, newCall(status, newLit ord(value)))
   elif value is float:
     result = newColonExpr(name, newLit value)
@@ -415,47 +422,50 @@ proc ctor(test: Test): NimNode =
     when value isnot ref:
       result.add composeColon(ident(name), value)
 
-proc pad(n: NimNode; size: int): NimNode =
-  let align = bindSym"align"
-  result = newCall(align, newCall(ident"$", n), size.newLit)
+when defined(release):
+  proc pad(n: NimNode; size: int): NimNode =
+    let align = bindSym"align"
+    result = newCall(align, newCall(ident"$", n), size.newLit)
 
-proc humanize(n: NimNode): NimNode =
-  ## convert bytes to human-readable form
-  template abs(n: NimNode): NimNode = newCall(bindSym"abs", n)
-  let human = bindSym"bytes2human"
-  result = newTree(nnkIfExpr,
-                   newTree(nnkElifBranch, infix(n, ">", 0.newLit),
-                           infix(newLit"+", "&",
-                           newDotExpr(newCall(human, n), ident"short"))),
-                   newTree(nnkElifBranch, infix(n, "==", 0.newLit),
-                           newLit""),
-                   newTree(nnkElse, infix(newLit"-", "&",
-                           newDotExpr(newCall(human, abs n), ident"short"))))
+  proc humanize(n: NimNode): NimNode =
+    ## convert bytes to human-readable form
+    template abs(n: NimNode): NimNode = newCall(bindSym"abs", n)
+    let human = bindSym"bytes2human"
+    result = nnkIfExpr.newTree
+    result.add:
+      nnkElifBranch.newTree(
+        infix(n, ">", 0.newLit),
+        infix(newLit"+", "&", newDotExpr(newCall(human, n), ident"short")))
+    result.add:
+      nnkElifBranch.newTree(infix(n, "==", 0.newLit), newLit"")
+    result.add:
+      nnkElse.newTree infix(newLit"-", "&",
+                            newDotExpr(newCall(human, abs n), ident"short"))
 
 proc postTest(test: Test): NimNode =
   ## run this after a test has completed
   result = newStmtList()
-  let tests = bindSym"tests"
   let temp = genSym(nskVar, "test")
-  let tempClock = newDotExpr(temp, ident"clock")
-  let tempMem = newDotExpr(temp, ident"memory")
   result.add newVarStmt(temp, ctor(test))
 
-  # record the duration
-  result.add newAssignment(tempClock, infix(newCall(bindSym"epochTime"),
-                                            "-", bindSym"clock"))
-  # record the memory
-  let quiesce = newCall(bindSym"quiesceMemory", newLit"")
-  result.add newAssignment(tempMem, infix(quiesce, "-", bindSym"memory"))
-  # stash it in the sequence?
-  #result.add newCall(ident"add", tests, temp)
-
-  let newDur = bindSym"initDuration"
-  let nano = newCall(newDur, newTree(nnkExprEqExpr, ident"nanoseconds",
-                                     newCall(ident"int",  # convert it to int
-                                             infix(tempClock, "*", # nano/sec
-                                                   1_000_000_000.newLit))))
   when defined(release):
+    let tempClock = newDotExpr(temp, ident"clock")
+    let tempMem = newDotExpr(temp, ident"memory")
+
+    # record the duration
+    result.add newAssignment(tempClock, infix(newCall(bindSym"epochTime"),
+                                              "-", bindSym"clock"))
+    # record the memory
+    let quiesce = newCall(bindSym"quiesceMemory", newLit"")
+    result.add newAssignment(tempMem, infix(quiesce, "-", bindSym"memory"))
+
+    let newDur = bindSym"initDuration"
+    let nano = newCall(newDur,
+                       newTree(nnkExprEqExpr, ident"nanoseconds",
+                               newCall(ident"int",    # convert it to int
+                                infix(tempClock, "*", # nano/sec
+                                      1_000_000_000.newLit))))
+
     # compose the status line
     var text = newStmtList()
     text.add testNumStyle & pad(newLit($test.number), 5)
@@ -464,6 +474,12 @@ proc postTest(test: Test): NimNode =
     # the short duration representing how long the test took
     text.add pad(newCall(bindSym"shortDuration", nano), 20)
     result.add output(comment(nestList(ident"&", text)))
+
+  # stash it in the sequence?
+  when false:
+    let tests = bindSym"tests"
+    result.add newCall(ident"add", tests, temp)
+
 
 proc compilerr(t: var Test): NimNode {.used.} =
   ## the compiler wasn't able to compile the test
@@ -639,3 +655,81 @@ when false:
           result.inc len(_.strVal.splitLines())
         else:
           break
+
+when isMainModule:
+  import std/[strutils, tables, os, osproc]
+
+  ##
+  ## it's crude because it's converted from nimscript
+  ##
+
+  const
+    directory = "tests"
+
+  type
+    Compilers = enum c, cpp
+    Optimizations = enum debug, release, danger
+    Models = enum refc, markAndSweep, arc, orc
+
+  # set some default matrix members
+  var opt = {debug: @["--stackTrace:on"]}.toTable
+  var cp = @[c]
+  # the default gc varies with version
+  var gc =
+    when (NimMajor, NimMinor) >= (1, 2):
+      {arc}
+    else:
+      {refc}
+  var
+    hints = @["--hint[Cc]=off", "--hint[Link]=off", "--hint[Conf]=off",
+              "--hint[Processing]=off", "--hint[Exec]=off"]
+    defaults = @["--path:" & quoteShell(parentDir directory)]
+
+  # remote ci expands the matrix
+  if getEnv("GITHUB_ACTIONS", "false") == "true":
+    cp.add cpp                  # add cpp
+    gc.incl refc                # add refc
+    gc.incl markAndSweep        # add markAndSweep
+    if arc in gc:               # add orc if arc is available
+      gc.incl orc
+    for o in {release, danger}: # add other optimization levels
+      opt[o] = opt.getOrDefault(o, @[]) & @["--define:" & $o]
+
+  proc attempt(cmd: string): int =
+    ## attempt execution of a random command; returns the exit code
+    stderr.writeLine "$ " & cmd
+    try:
+      result = execCmd cmd
+    except OSError:
+      result = 1
+
+  proc perform(fn: string) =
+    ## build and run a test according to matrix; may quit with exit code
+    let pattern = "nim $1 --gc:$2 $3 --run " & hints.join(" ") & " $4"
+    for opt, options in opt.pairs:
+      var options = defaults & options
+      for gc in gc.items:
+        for cp in cp.items:
+          let run = pattern % [$cp, $gc, options.join(" "), fn]
+          let code = attempt run
+          if code != 0:
+            case $NimMajor & "." & $NimMinor
+            of "1.4":
+              if gc > orc:
+                continue
+            of "1.2":
+              if gc > arc:
+                continue
+            else:
+              discard
+            # i don't care if cpp works anymore
+            if cp != cpp:
+              echo "test `" & run & "` failed; compiler:"
+              discard execCmd "nim --version"
+              quit code
+
+  for test in directory.walkDirRec(yieldFilter = {pcFile, pcLinkToFile}):
+    if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
+      perform test
+
+{.pop.}
