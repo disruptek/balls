@@ -5,6 +5,7 @@ import std/terminal
 import std/strutils
 import std/macros
 import std/colors
+import std/streams
 
 when (NimMajor, NimMinor) >= (1, 3):
   import std/exitprocs
@@ -746,6 +747,7 @@ when isMainModule:
             # i don't care if cpp works anymore
             if cp != cpp:
               checkpoint "test `" & run & "` failed; compiler:"
+              flushFile stderr  # hope we beat the compiler's --version
               discard execCmd "nim --version"
               quit code
 
