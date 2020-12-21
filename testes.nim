@@ -1,3 +1,4 @@
+import std/algorithm
 import std/times
 import std/os
 import std/sequtils
@@ -753,8 +754,20 @@ when isMainModule:
               discard execCmd "nim --version"
               quit code
 
-  for test in directory.walkDirRec(yieldFilter = {pcFile, pcLinkToFile}):
-    if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
-      perform test
+  proc ordered(directory: string): seq[string] =
+    ## order a directory of test files usefully
+    # collect the filenames
+    for test in directory.walkDirRec(yieldFilter = {pcFile, pcLinkToFile}):
+      if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
+        result.add test
+
+    # sort them by age, recently-changed first
+    proc age(path: string): Time =
+      getFileInfo(path, followSymlink = true).lastWriteTime
+    proc byAge(a, b: string): int = system.cmp(a.age, b.age)
+    result.sort(byAge, Descending)
+
+  for test in ordered directory:
+    perform test
 
 {.pop.}
