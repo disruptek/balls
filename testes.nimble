@@ -1,4 +1,4 @@
-version = "0.7.2"
+version = "0.7.3"
 author = "disruptek"
 description = "a cure for salty testes"
 license = "MIT"
@@ -11,7 +11,6 @@ requires "https://github.com/juancarlospaco/nim-bytes2human"
 bin = @["testes"]           # build the binary for basic test running
 installExt = @["nim"]       # we need to install testes.nim also
 skipDirs = @["tests"]       # so stupid...  who doesn't want tests?
-installFiles = @["testes"]  # for some reason we need this too?
 
 task test, "run tests for ci":
   exec "nim c --run testes.nim"
