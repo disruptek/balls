@@ -705,7 +705,8 @@ when isMainModule:
   var
     hints = @["--hint[Cc]=off", "--hint[Link]=off", "--hint[Conf]=off",
               "--hint[Processing]=off", "--hint[Exec]=off"]
-    defaults = @["--path:" & quoteShell(parentDir directory)]
+    defaults = @["--forceBuild:on",
+                 "--path:" & quoteShell(parentDir directory)]
 
   # remote ci expands the matrix
   if getEnv("GITHUB_ACTIONS", "false") == "true":
