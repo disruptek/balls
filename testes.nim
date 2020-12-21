@@ -713,7 +713,8 @@ when isMainModule:
     gc.incl refc                # add refc
     gc.incl markAndSweep        # add markAndSweep
     if arc in gc:               # add orc if arc is available
-      gc.incl orc
+      if (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
+        gc.incl orc
     for o in {release, danger}: # add other optimization levels
       opt[o] = opt.getOrDefault(o, @[]) & @["--define:" & $o]
 
