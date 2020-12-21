@@ -135,7 +135,7 @@ proc `$`(style: Styling): string =
     result = style.string
   else:
     # at runtime, try to emit style if possible
-    if stdout.isAtty:
+    if stderr.isAtty:
       result = style.string
       if result != resetStyle.string:
         result = resetStyle.string & result
@@ -174,7 +174,7 @@ proc `&`(style: Styling; n: NimNode): NimNode =
   var n = dollar(n)
   let text = newStmtList(newLit($style), n, newLit($resetStyle))
   result = nnkIfStmt.newNimNode(n)
-  result.add nnkElifBranch.newTree(newCall(isAtty, ident"stdout"),
+  result.add nnkElifBranch.newTree(newCall(isAtty, ident"stderr"),
                                    nestList(ident"&", text))
   result.add nnkElse.newTree(n)
 
@@ -250,7 +250,7 @@ proc numberLines(s: string; first = 1): NimNode =
 
 proc checkpoint*(ss: varargs[string, `$`]) =
   ## Like `echo`, but outputs to `stderr` with the other test output.
-  writeLine(stderr, ss)
+  writeLine(stderr, ss.join " ")
 
 proc output(n: NimNode): NimNode =
   assert not n.isNil
@@ -344,7 +344,7 @@ proc renderSource(t: Test): NimNode =
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let isAtty = bindSym"isAtty"
   let setResult = bindSym"setProgramResult"
-  result = newIfStmt((prefix(newCall(isAtty, ident"stdout"), "not"),
+  result = newIfStmt((prefix(newCall(isAtty, ident"stderr"), "not"),
                       newCall(setResult, code.newLit)))
 
 proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
@@ -718,7 +718,7 @@ when isMainModule:
 
   proc attempt(cmd: string): int =
     ## attempt execution of a random command; returns the exit code
-    stderr.writeLine "$ " & cmd
+    checkpoint "$ " & cmd
     try:
       result = execCmd cmd
     except OSError:
@@ -745,7 +745,7 @@ when isMainModule:
               discard
             # i don't care if cpp works anymore
             if cp != cpp:
-              echo "test `" & run & "` failed; compiler:"
+              checkpoint "test `" & run & "` failed; compiler:"
               discard execCmd "nim --version"
               quit code
 
