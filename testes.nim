@@ -739,7 +739,7 @@ when isMainModule:
     for opt, options in opt.pairs:
       var options = defaults & options
       # turn off sinkInference on 1.2 builds because it breaks VM code
-      if NimVersion.startsWith "1.2.":
+      if (NimMajor, NimMinor) == (1, 2):
         options.add "--sinkInference:off"
       for gc in gc.items:
         for cp in cp.items:
