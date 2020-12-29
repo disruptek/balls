@@ -1,4 +1,4 @@
-version = "0.7.7"
+version = "0.7.8"
 author = "disruptek"
 description = "a cure for salty testes"
 license = "MIT"

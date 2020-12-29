@@ -1,3 +1,4 @@
+import std/hashes
 import std/algorithm
 import std/times
 import std/os
@@ -61,7 +62,7 @@ type
   StatusKind = enum
     None = "  "
     Info = "🔵"          ## may prefix information
-    Okay = "🟢"          ## total success
+    Pass = "🟢"          ## total success
     Skip = "❔"          ## test was skipped
     Part = "🟡"          ## partial success
     Fail = "🔴"          ## assertion failure
@@ -293,7 +294,7 @@ macro report*(ss: varargs[typed]) =
 
 proc success(t: var Test): NimNode =
   ## what to do when a test is successful
-  t.status = Okay
+  t.status = Pass
   result = newStmtList()
   result.add t.incResults
   result.add t.output(successStyle & newLit(t.name))
@@ -577,7 +578,7 @@ proc makeTest(n: NimNode; name: string): Test =
   else:
     # it's not testable; we'll indicate that it worked (what else?)
     when defined(release):
-      result.status = Okay
+      result.status = Pass
 
     # output the status in any event; otherwise there will be no output
     result.n.add result.output(newLit result.name)
@@ -682,19 +683,34 @@ when false:
 when isMainModule:
   import std/[strutils, tables, os, osproc]
 
-  ##
-  ## it's crude because it's converted from nimscript
-  ##
-
   const
     directory = "tests"
+    failFast = true       # quit early on the CI
 
   type
-    Compilers = enum c, cpp
-    Optimizations = enum debug, release, danger
-    Models = enum refc, markAndSweep, arc, orc
+    Compiler = enum c, cpp
+    Optimizer = enum debug, release, danger
+    MemModel = enum refc, markAndSweep, arc, orc
+    Matrix = OrderedTable[Profile, StatusKind]
+    Profile = object
+      c: Compiler
+      opt: Optimizer
+      gc: MemModel
+      ran: string
+      fn: string
 
-  # set some default matrix members
+  proc hash(p: Profile): Hash =
+    var h: Hash = 0
+    h = h !& hash(p.ran)
+    result = !$h
+
+  proc `$`(p: Profile): string =
+    let fn = extractFilename changeFileExt(p.fn, "")
+    "$#: $# $# $#" % [ fn, $p.c, $p.gc, $p.opt ]
+
+  let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
+  var matrix: Matrix
+  # set some default matrix members (profiles)
   var opt = {debug: @["--stackTrace:on"]}.toTable
   var cp = @[c]
   # the default gc varies with version
@@ -703,14 +719,19 @@ when isMainModule:
       {arc}
     else:
       {refc}
-  var
-    hints = @["--hint[Cc]=off", "--hint[Link]=off", "--hint[Conf]=off",
-              "--hint[Processing]=off", "--hint[Exec]=off"]
-    defaults = @["--forceBuild:on",
-                 "--path:" & quoteShell(parentDir directory)]
+  # options common to all profiles
+  var defaults = @["--path:" & quoteShell(parentDir directory)]
+  var hints: seq[string]
+  var omit = @["Cc", "Link", "Conf", "Processing", "Exec"]
+  if ci:
+    omit.add "Performance"
+  for hint in omit.items:
+    hints.add "--hint[$#]=off" % [ hint ]
 
   # remote ci expands the matrix
-  if getEnv("GITHUB_ACTIONS", "false") == "true":
+  if ci:
+    # always rebuild on the CI, but not locally
+    defaults.add "--forceBuild:on"
     cp.add cpp                  # add cpp
     gc.incl refc                # add refc
     gc.incl markAndSweep        # add markAndSweep
@@ -745,7 +766,11 @@ when isMainModule:
         for cp in cp.items:
           let run = pattern % [$cp, $gc, options.join(" "), fn]
           let code = attempt run
-          if code != 0:
+          let profile = Profile(fn: fn, ran: run, gc: gc, c: cp, opt: opt)
+          if code == 0:
+            matrix[profile] = Pass
+          else:
+            matrix[profile] = Fail
             case $NimMajor & "." & $NimMinor
             of "1.4":
               if gc > orc:
@@ -760,7 +785,9 @@ when isMainModule:
               checkpoint "test `" & run & "` failed; compiler:"
               flushFile stderr  # hope we beat the compiler's --version
               discard execCmd "nim --version"
-              quit code
+              # don't quit when run locally; just keep chugging away
+              if ci and failFast:
+                quit code
 
   proc ordered(directory: string): seq[string] =
     ## order a directory of test files usefully
@@ -777,5 +804,8 @@ when isMainModule:
 
   for test in ordered directory:
     perform test
+    checkpoint "\ncurrent matrix:"
+    for profile, result in matrix.pairs:
+      checkpoint result, profile
 
 {.pop.}
