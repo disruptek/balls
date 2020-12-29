@@ -733,6 +733,9 @@ when isMainModule:
     let pattern = "nim $1 --gc:$2 $3 --run " & hints.join(" ") & " $4"
     for opt, options in opt.pairs:
       var options = defaults & options
+      # turn off sinkInference on 1.2 builds because it breaks VM code
+      if NimVersion.startsWith "1.2.":
+        options.add "--sinkInference:off"
       for gc in gc.items:
         for cp in cp.items:
           let run = pattern % [$cp, $gc, options.join(" "), fn]
