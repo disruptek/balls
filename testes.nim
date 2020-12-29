@@ -719,6 +719,10 @@ when isMainModule:
         gc.incl orc
     for o in {release, danger}: # add other optimization levels
       opt[o] = opt.getOrDefault(o, @[]) & @["--define:" & $o]
+  else:
+    # do a danger build locally so we can check time/space
+    for o in {danger}:          # add other optimization levels
+      opt[o] = opt.getOrDefault(o, @[]) & @["--define:" & $o]
 
   proc attempt(cmd: string): int =
     ## attempt execution of a random command; returns the exit code
