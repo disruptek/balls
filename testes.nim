@@ -729,7 +729,8 @@ when isMainModule:
     checkpoint "$ " & cmd
     try:
       result = execCmd cmd
-    except OSError:
+    except OSError as e:
+      checkpoint "$1: $2" % [ $e.name, e.msg ]
       result = 1
 
   proc perform(fn: string) =
