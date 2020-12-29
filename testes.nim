@@ -766,11 +766,20 @@ when isMainModule:
         for cp in cp.items:
           let run = pattern % [$cp, $gc, options.join(" "), fn]
           let code = attempt run
+
+          # record the result in the matrix
           let profile = Profile(fn: fn, ran: run, gc: gc, c: cp, opt: opt)
           if code == 0:
             matrix[profile] = Pass
           else:
             matrix[profile] = Fail
+
+          # for now, output the matrix after every test
+          checkpoint "\ncurrent matrix:"
+          for profile, result in matrix.pairs:
+            checkpoint result, profile
+
+          if code != 0:
             case $NimMajor & "." & $NimMinor
             of "1.4":
               if gc > orc:
@@ -802,10 +811,8 @@ when isMainModule:
     proc byAge(a, b: string): int = system.cmp(a.age, b.age)
     result.sort(byAge, Descending)
 
+  # run each test in tests/ (or whatever) in a useful order
   for test in ordered directory:
     perform test
-    checkpoint "\ncurrent matrix:"
-    for profile, result in matrix.pairs:
-      checkpoint result, profile
 
 {.pop.}
