@@ -51,3 +51,8 @@ testes:
 
   report "report for expression expansion:", r != 5
   checkpoint "but checkpoint behaves as it does in unittest: ", r == 5
+
+  block great_expectations:
+    expect ValueError:
+      checkpoint "you love to see it"
+      raise newException(ValueError, "awful")

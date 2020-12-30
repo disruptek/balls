@@ -88,3 +88,16 @@ testes:
   block check_with_message:
     let x = 0
     check "".len < x, "empty strings are STILL too long"
+
+  block great_expectations:
+    expect ValueError:
+      checkpoint "you love to see it"
+      raise newException(ValueError, "awful")
+
+  block unmet_expectations:
+    expect ValueError:
+      checkpoint "here comes trouble"
+
+  block dashed_expectations:
+    expect ValueError:
+      raise newException(IOError, "the in/out hurts")

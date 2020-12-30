@@ -60,6 +60,7 @@ const
 type
   FailError = object of CatchableError
   SkipError = object of CatchableError
+  ExpectedError = object of CatchableError
   StatusKind = enum
     None = "  "
     Info = "🔵"          ## may prefix information
@@ -420,6 +421,22 @@ proc exception(t: var Test; n: NimNode): NimNode =
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
+
+template expect*(exception: typed; body: untyped) =
+  ## Fails the test if an expected exception is not raised in the body.
+  when exception isnot CatchableError:
+    raise newException(Defect, "supply a CatchableError type")
+  try:
+    body
+    raise newException(ExpectedError,
+      "expected $# exception" % [ $exception ])
+  except exception:
+    discard
+  except ExpectedError as e:
+    fail e.msg
+  except CatchableError as e:
+    checkpoint "$#: $#" % [ $e.name, e.msg ]
+    fail "expected $# but caught $#" % [ $exception, $e.name ]
 
 proc reportResults(): NimNode =
   ## produce a small legend showing result totals
