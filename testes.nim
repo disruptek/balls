@@ -719,6 +719,14 @@ when isMainModule:
     let fn = extractFilename changeFileExt(p.fn, "")
     "$#: $# $# $#" % [ fn, $p.c, $p.gc, $p.opt ]
 
+  proc hints(p: Profile; ci: bool): string =
+    ## compute --hint(s) as appropriate
+    var omit = @["Cc", "Link", "Conf", "Processing", "Exec"]
+    if ci or p.opt notin {release, danger}:
+      omit.add "Performance"
+    for hint in omit.items:
+      result.add " --hint[$#]=off" % [ hint ]
+
   let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
   var matrix: Matrix
   # set some default matrix members (profiles)
@@ -732,12 +740,6 @@ when isMainModule:
       {refc}
   # options common to all profiles
   var defaults = @["--path:" & quoteShell(parentDir directory)]
-  var hints: seq[string]
-  var omit = @["Cc", "Link", "Conf", "Processing", "Exec"]
-  if ci:
-    omit.add "Performance"
-  for hint in omit.items:
-    hints.add "--hint[$#]=off" % [ hint ]
 
   # remote ci expands the matrix
   if ci:
@@ -769,7 +771,7 @@ when isMainModule:
 
   proc perform(fn: string) =
     ## build and run a test according to matrix; may quit with exit code
-    let pattern = "nim $1 --gc:$2 $3 --run " & hints.join(" ") & " $4"
+    let pattern = "nim $1 --gc:$2 $3 --run"
     for opt, options in opt.pairs:
       var options = defaults & options
       # turn off sinkInference on 1.2 builds because it breaks VM code
@@ -777,11 +779,24 @@ when isMainModule:
         options.add "--sinkInference:off"
       for gc in gc.items:
         for cp in cp.items:
-          let run = pattern % [$cp, $gc, options.join(" "), fn]
-          let code = attempt run
 
-          # record the result in the matrix
-          let profile = Profile(fn: fn, ran: run, gc: gc, c: cp, opt: opt)
+          # the profile is used for matrix tracking
+          var profile = Profile(fn: fn, gc: gc, c: cp, opt: opt)
+
+          # we also use it to determine which hints to include
+          let hs = hints(profile, ci)
+
+          # compose the remainder of the command-line
+          var run = pattern % [$cp, $gc, join(options, " ")]
+
+          # store the command-line with the filename for c+p reasons
+          profile.ran = run & " " & fn
+
+          # add the hints into the invocation ahead of the filename
+          run.add hs & " " & fn
+
+          # run it and record the result in the matrix
+          let code = attempt run
           if code == 0:
             matrix[profile] = Pass
           else:
@@ -804,7 +819,8 @@ when isMainModule:
               discard
             # i don't care if cpp works anymore
             if cp != cpp:
-              checkpoint "test `" & run & "` failed; compiler:"
+              checkpoint profile.ran
+              checkpoint "failed; compiler:"
               flushFile stderr  # hope we beat the compiler's --version
               discard execCmd "nim --version"
               # don't quit when run locally; just keep chugging away
