@@ -300,8 +300,13 @@ proc success(t: var Test): NimNode =
   result.add t.output(successStyle & newLit(t.name))
 
 proc fromFileGetLine(file: string; line: int): string =
-  let lines = toSeq lines(file)
-  result = lines[line - 1]
+  ## TODO: optimize this expensive fetch
+  if file.fileExists:
+    let lines = toSeq lines(file)
+    result = lines[line - 1]
+  else:
+    #result = "(not found: $#)" % [ file ]
+    result = "(file not found)"
 
 proc findWhere(s: string; p: string; into: var string): bool {.used.} =
   ## find the location of a substring and, if found, produce empty prefix
