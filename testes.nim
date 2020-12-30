@@ -354,9 +354,9 @@ proc renderSource(t: Test): NimNode =
   result = t.output(repr(node).numberLines(info.line).prefixLines(" 🗏 "))
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
-  let isAtty = bindSym"isAtty"
   let setResult = bindSym"setProgramResult"
   when false:
+    let isAtty = bindSym"isAtty"
     # if not isAtty(stderr): setResult(code)
     result = newIfStmt((prefix(newCall(isAtty, ident"stderr"), "not"),
                         newCall(setResult, code.newLit)))
