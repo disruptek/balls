@@ -352,8 +352,14 @@ proc renderSource(t: Test): NimNode =
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let isAtty = bindSym"isAtty"
   let setResult = bindSym"setProgramResult"
-  result = newIfStmt((prefix(newCall(isAtty, ident"stderr"), "not"),
-                      newCall(setResult, code.newLit)))
+  when false:
+    # if not isAtty(stderr): setResult(code)
+    result = newIfStmt((prefix(newCall(isAtty, ident"stderr"), "not"),
+                        newCall(setResult, code.newLit)))
+  else:
+    # because the test runner needs to measure success using exit code,
+    # we need to exit with a code regardless of tty condition
+    result = newCall(setResult, code.newLit)
 
 proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
   ## what to do when a test fails
