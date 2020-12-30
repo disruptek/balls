@@ -19,6 +19,7 @@ else:
     type AssertionDefect = AssertionError
   proc setProgramResult(q: int) =
     programResult = q
+  proc addExitProc(p: proc() {.noconv.}) = addQuitProc p
 
 import grok/mem
 import grok/time
@@ -660,6 +661,8 @@ proc findName(n: NimNode; index: int): string =
   else:
     result = repr(n)
 
+proc flushStderr() {.noconv.} = flushFile stderr
+
 macro testes*(tests: untyped) =
   ## For a good time, put each test in a `block:` underneath the `testes`.
   ## You can specify test names using `##` comment statements, or block
@@ -670,6 +673,9 @@ macro testes*(tests: untyped) =
     # windows cmd / powershell color support
     when defined(windows):
       result.add(nnkDiscardStmt.newTree newCall(ident"execShellCmd", newLit""))
+
+    # ensure that we flush stderr on exit
+    result.add newCall(bindSym"addExitProc", bindSym"flushStderr")
 
     for index, n in pairs(tests):
       var n = n.rewriteTestBlock
