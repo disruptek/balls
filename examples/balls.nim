@@ -100,4 +100,4 @@ testes:
 
   block dashed_expectations:
     expect ValueError:
-      raise newException(IOError, "the in/out hurts")
+      check false, "the truth hurts, but not as much as the false"

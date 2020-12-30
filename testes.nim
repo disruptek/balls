@@ -426,17 +426,19 @@ template expect*(exception: typed; body: untyped) =
   ## Fails the test if an expected exception is not raised in the body.
   when exception isnot CatchableError:
     raise newException(Defect, "supply a CatchableError type")
-  try:
-    body
-    raise newException(ExpectedError,
-      "expected $# exception" % [ $exception ])
-  except exception:
-    discard
-  except ExpectedError as e:
-    fail e.msg
-  except CatchableError as e:
-    checkpoint "$#: $#" % [ $e.name, e.msg ]
-    fail "expected $# but caught $#" % [ $exception, $e.name ]
+  else:
+    block expected:
+      try:
+        body
+      except exception:
+        break expected
+      except ExpectedError as e:
+        fail e.msg
+      except CatchableError as e:
+        checkpoint "$#: $#" % [ $e.name, e.msg ]
+        fail "expected $# but caught $#" % [ $exception, $e.name ]
+      raise newException(ExpectedError,
+        "expected $# exception" % [ $exception ])
 
 proc reportResults(): NimNode =
   ## produce a small legend showing result totals
