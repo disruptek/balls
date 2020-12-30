@@ -31,7 +31,7 @@ when defined(windows):
   export execShellCmd
 
 const
-  ci = getEnv("GITHUB_ACTIONS", "false") == "true"
+  onCI = getEnv("GITHUB_ACTIONS", "false") == "true"
   statements {.used.} = {
     # these are not r-values
 
@@ -88,7 +88,7 @@ when false:
 var clock: float          ## pre-test time
 var memory: int           ## pre-test memory
 
-proc useColor(): bool = ci or stderr.isAtty
+proc useColor(): bool = onCI or stderr.isAtty
 
 proc rewrite(n: NimNode; r: Rewrite): NimNode =
   ## perform a recursive rewrite (at least once) using the given mutator
