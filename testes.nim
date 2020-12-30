@@ -31,6 +31,7 @@ when defined(windows):
   export execShellCmd
 
 const
+  onCI = getEnv("GITHUB_ACTIONS", "false") == "true"
   statements {.used.} = {
     # these are not r-values
 
@@ -87,6 +88,8 @@ when false:
 var clock: float          ## pre-test time
 var memory: int           ## pre-test memory
 
+proc useColor(): bool = onCI or stderr.isAtty
+
 proc rewrite(n: NimNode; r: Rewrite): NimNode =
   ## perform a recursive rewrite (at least once) using the given mutator
   result = r(n)
@@ -138,7 +141,7 @@ proc `$`(style: Styling): string =
     result = style.string
   else:
     # at runtime, try to emit style if possible
-    if stderr.isAtty:
+    if useColor():
       result = style.string
       if result != resetStyle.string:
         result = resetStyle.string & result
@@ -173,11 +176,11 @@ proc combineLiterals(n: NimNode): NimNode =
 proc `&`(style: Styling; n: NimNode): NimNode =
   ## combine style and something $able, but only output the
   ## style if you find that the program is on a tty at runtime
-  let isAtty = bindSym"isAtty"
+  let useColor = bindSym"useColor"
   var n = dollar(n)
   let text = newStmtList(newLit($style), n, newLit($resetStyle))
   result = nnkIfStmt.newNimNode(n)
-  result.add nnkElifBranch.newTree(newCall(isAtty, ident"stderr"),
+  result.add nnkElifBranch.newTree(newCall(useColor),
                                    nestList(ident"&", text))
   result.add nnkElse.newTree(n)
 
