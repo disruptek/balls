@@ -761,7 +761,7 @@ when isMainModule:
     else:
       {refc}
   # options common to all profiles
-  var defaults = @["--path:" & quoteShell(parentDir directory)]
+  var defaults = @["""--path=".""""]  # work around early nim behavior
 
   # remote ci expands the matrix
   if ci:
