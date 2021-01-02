@@ -63,14 +63,14 @@ type
   SkipError = object of CatchableError
   ExpectedError = object of CatchableError
   StatusKind = enum
-    None = "  "
-    Info = "🔵"          ## may prefix information
-    Pass = "🟢"          ## total success
-    Skip = "❔"          ## test was skipped
-    Part = "🟡"          ## partial success
-    Fail = "🔴"          ## assertion failure
-    Died = "💥"          ## unexpected exception
-    Oops = "⛔"          ## compiles() failed
+    None = "    "
+    Info = "info"          ## may prefix information
+    Pass = "pass"          ## total success
+    Skip = "skip"          ## test was skipped
+    Part = "part"          ## partial success
+    Fail = "fail"          ## assertion failure
+    Died = "died"          ## unexpected exception
+    Oops = "oops"          ## compiles() failed
 
   Test = object
     status: StatusKind    ## the result of the test
@@ -352,7 +352,7 @@ proc renderSource(t: Test): NimNode =
     if node[0].kind == nnkCommentStmt:
       let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
       node[0] = newCommentStmtNode(dropFirst)
-  result = t.output(repr(node).numberLines(info.line).prefixLines(" 🗏 "))
+  result = t.output(repr(node).numberLines(info.line).prefixLines(" "))
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let setResult = bindSym"setProgramResult"
