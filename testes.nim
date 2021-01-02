@@ -799,12 +799,14 @@ when isMainModule:
 
   proc perform(fn: string) =
     ## build and run a test according to matrix; may quit with exit code
-    let pattern = "nim $1 --run --gc:$2 $3"
+    let pattern = "nim $1 --gc:$2 $3"
     for opt, options in opt.pairs:
       var options = defaults & options
       # add in any command-line arguments
       for index in 1 .. paramCount():
         options.add paramStr(index)
+      if "--compileOnly" notin options:
+        options.add "--run"
       # turn off sinkInference on 1.2 builds because it breaks VM code
       if (NimMajor, NimMinor) == (1, 2):
         options.add "--sinkInference:off"
