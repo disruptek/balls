@@ -732,20 +732,38 @@ when isMainModule:
     MemModel = enum refc, markAndSweep, arc, orc
     Matrix = OrderedTable[Profile, StatusKind]
     Profile = object
-      c: Compiler
+      cp: Compiler
       opt: Optimizer
       gc: MemModel
       ran: string
       fn: string
+      options: seq[string]
 
   proc hash(p: Profile): Hash =
     var h: Hash = 0
-    h = h !& hash(p.ran)
+    h = h !& hash(p.cp)
+    h = h !& hash(p.opt)
+    h = h !& hash(p.gc)
+    h = h !& hash(p.fn)
+    h = h !& hash(p.options)
     result = !$h
 
   proc `$`(p: Profile): string =
     let fn = extractFilename changeFileExt(p.fn, "")
-    "$#: $# $# $#" % [ fn, $p.c, $p.gc, $p.opt ]
+    "$#: $# $# $#" % [ fn, $p.cp, $p.gc, $p.opt ]
+
+  template cmper(f: untyped) {.dirty.} =
+    result = system.cmp(a.`f`, b.`f`)
+    if result != 0:
+      return
+
+  proc cmp(a, b: Profile): int =
+    cmper cp
+    cmper opt
+    cmper gc
+
+  proc `<`(a, b: Profile): bool = cmp(a, b) == -1
+  proc `==`(a, b: Profile): bool = cmp(a, b) == 0
 
   proc hints(p: Profile; ci: bool): string =
     ## compute --hint(s) as appropriate
@@ -797,68 +815,86 @@ when isMainModule:
       checkpoint "$1: $2" % [ $e.name, e.msg ]
       result = 1
 
-  proc perform(fn: string) =
-    ## build and run a test according to matrix; may quit with exit code
-    let pattern = "nim $1 --gc:$2 $3"
+  proc checkpoint(matrix: Matrix) =
+    checkpoint "\ncurrent matrix:"
+    for profile, result in matrix.pairs:
+      checkpoint result, profile
+
+  proc perform(p: var Profile): StatusKind =
+    ## run a single profile and return the result
+    const pattern = "nim $1 --gc:$2 $3"
+    # we also use it to determine which hints to include
+    let hs = hints(p, ci)
+
+    # compose the remainder of the command-line
+    var run = pattern % [$p.cp, $p.gc, join(p.options, " ")]
+
+    # store the command-line with the filename for c+p reasons
+    p.ran = run & " " & p.fn
+
+    # add the hints into the invocation ahead of the filename
+    run.add hs & " " & p.fn
+
+    # run it and record the result in the matrix
+    let code = attempt run
+    if code == 0:
+      result = Pass
+    else:
+      result = Fail
+
+  proc perform(matrix: var Matrix; profiles: seq[Profile]) =
+    ## try to run a bunch of profiles and fail early if you can
+    var profiles = profiles
+    sort(profiles, cmp)         # order the profiles
+    for p in profiles.mitems:
+      matrix[p] = perform p
+
+      # for now, output the matrix after every test
+      checkpoint matrix
+
+      if matrix[p] > Part:
+        case $NimMajor & "." & $NimMinor
+        of "1.4":
+          if p.gc > orc:
+            continue
+        of "1.2":
+          if p.gc > arc:
+            continue
+        else:
+          discard
+        checkpoint p.ran
+        checkpoint "failed; compiler:"
+        flushFile stderr  # hope we beat the compiler's --version
+        discard execCmd "nim --version"
+        # don't quit when run locally; just keep chugging away
+        if ci and failFast:
+          quit 1
+        else:
+          break
+
+  proc profiles(fn: string): seq[Profile] =
+    ## produce profiles for a given test filename
     for opt, options in opt.pairs:
       var options = defaults & options
+
       # add in any command-line arguments
       for index in 1 .. paramCount():
         options.add paramStr(index)
+
+      # don't run compile-only tests
       if "--compileOnly" notin options:
         options.add "--run"
+
       # turn off sinkInference on 1.2 builds because it breaks VM code
       if (NimMajor, NimMinor) == (1, 2):
         options.add "--sinkInference:off"
+
+      # collect the profiles we want to test
       for gc in gc.items:
         for cp in cp.items:
-
-          # the profile is used for matrix tracking
-          var profile = Profile(fn: fn, gc: gc, c: cp, opt: opt)
-
-          # we also use it to determine which hints to include
-          let hs = hints(profile, ci)
-
-          # compose the remainder of the command-line
-          var run = pattern % [$cp, $gc, join(options, " ")]
-
-          # store the command-line with the filename for c+p reasons
-          profile.ran = run & " " & fn
-
-          # add the hints into the invocation ahead of the filename
-          run.add hs & " " & fn
-
-          # run it and record the result in the matrix
-          let code = attempt run
-          if code == 0:
-            matrix[profile] = Pass
-          else:
-            matrix[profile] = Fail
-
-          # for now, output the matrix after every test
-          checkpoint "\ncurrent matrix:"
-          for profile, result in matrix.pairs:
-            checkpoint result, profile
-
-          if code != 0:
-            case $NimMajor & "." & $NimMinor
-            of "1.4":
-              if gc > orc:
-                continue
-            of "1.2":
-              if gc > arc:
-                continue
-            else:
-              discard
-            # i don't care if cpp works anymore
-            if cp != cpp:
-              checkpoint profile.ran
-              checkpoint "failed; compiler:"
-              flushFile stderr  # hope we beat the compiler's --version
-              discard execCmd "nim --version"
-              # don't quit when run locally; just keep chugging away
-              if ci and failFast:
-                quit code
+          var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
+          profile.options = options
+          result.add profile
 
   proc ordered(directory: string): seq[string] =
     ## order a directory of test files usefully
@@ -875,6 +911,6 @@ when isMainModule:
 
   # run each test in tests/ (or whatever) in a useful order
   for test in ordered directory:
-    perform test
+    matrix.perform test.profiles
 
 {.pop.}
