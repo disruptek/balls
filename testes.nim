@@ -691,6 +691,10 @@ macro testes*(tests: untyped) =
   finally:
     result.add reportResults()
 
+# Compat with nim stdlib unittest
+template suite*(x: string; body: untyped) =
+  testes: body
+
 # unused code that may move back into service
 when false:
   proc massageLabel(n: NimNode): NimNode =
