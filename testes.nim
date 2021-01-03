@@ -737,7 +737,6 @@ when isMainModule:
       gc: MemModel
       ran: string
       fn: string
-      options: seq[string]
 
   proc hash(p: Profile): Hash =
     var h: Hash = 0
@@ -745,7 +744,7 @@ when isMainModule:
     h = h !& hash(p.opt)
     h = h !& hash(p.gc)
     h = h !& hash(p.fn)
-    h = h !& hash(p.options)
+    #h = h !& hash(p.options)
     result = !$h
 
   proc `$`(p: Profile): string =
@@ -776,7 +775,7 @@ when isMainModule:
   let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
   var matrix: Matrix
   # set some default matrix members (profiles)
-  var opt = {debug: @["--stackTrace:on"]}.toTable
+  var opt = {debug: @["--debuginfo", "--stackTrace:on"]}.toTable
   var cp = @[c]
   # the default gc varies with version
   var gc =
@@ -799,8 +798,6 @@ when isMainModule:
         gc.incl orc
     for o in {release, danger}: # add other optimization levels
       opt[o] = opt.getOrDefault(o, @[]) & @["--define:" & $o]
-    # remove debugging build on ci
-    opt.del debug
   else:
     # do a danger build locally so we can check time/space
     for o in {danger}:          # add other optimization levels
@@ -818,7 +815,23 @@ when isMainModule:
   proc checkpoint(matrix: Matrix) =
     checkpoint "\ncurrent matrix:"
     for profile, result in matrix.pairs:
-      checkpoint result, profile
+      if result != Skip:
+        checkpoint result, profile
+
+  proc options(p: Profile): seq[string] =
+    result = defaults & opt[p.opt]
+
+    # add in any command-line arguments
+    for index in 1 .. paramCount():
+      result.add paramStr(index)
+
+    # don't run compile-only tests
+    if "--compileOnly" notin result:
+      result.add "--run"
+
+    # turn off sinkInference on 1.2 builds because it breaks VM code
+    if (NimMajor, NimMinor) == (1, 2):
+      result.add "--sinkInference:off"
 
   proc perform(p: var Profile): StatusKind =
     ## run a single profile and return the result
@@ -869,31 +882,20 @@ when isMainModule:
         # don't quit when run locally; just keep chugging away
         if ci and failFast:
           if p.cp != cpp:
+            # before we fail the ci, run a debug test for shits and grins
+            var n = p
+            n.opt = debug
+            discard perform n
+            matrix[n] = Info
             quit 1
         break
 
   proc profiles(fn: string): seq[Profile] =
     ## produce profiles for a given test filename
-    for opt, options in opt.pairs:
-      var options = defaults & options
-
-      # add in any command-line arguments
-      for index in 1 .. paramCount():
-        options.add paramStr(index)
-
-      # don't run compile-only tests
-      if "--compileOnly" notin options:
-        options.add "--run"
-
-      # turn off sinkInference on 1.2 builds because it breaks VM code
-      if (NimMajor, NimMinor) == (1, 2):
-        options.add "--sinkInference:off"
-
-      # collect the profiles we want to test
+    for opt in opt.keys:
       for gc in gc.items:
         for cp in cp.items:
           var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
-          profile.options = options
           result.add profile
 
   proc ordered(directory: string): seq[string] =
