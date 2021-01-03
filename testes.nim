@@ -868,9 +868,9 @@ when isMainModule:
         discard execCmd "nim --version"
         # don't quit when run locally; just keep chugging away
         if ci and failFast:
-          quit 1
-        else:
-          break
+          if p.cp != cpp:
+            quit 1
+        break
 
   proc profiles(fn: string): seq[Profile] =
     ## produce profiles for a given test filename
