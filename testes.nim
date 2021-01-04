@@ -877,7 +877,7 @@ when isMainModule:
           discard
         checkpoint p.ran
         checkpoint "failed; compiler:"
-        flushFile stderr  # hope we beat the compiler's --version
+        flushStderr()   # hope we beat the compiler's --version
         discard execCmd "nim --version"
         # don't quit when run locally; just keep chugging away
         if ci and failFast:
