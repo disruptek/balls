@@ -859,6 +859,11 @@ when isMainModule:
     ## guard against my stupidity
     matrix.getOrDefault(p, Skip) != Skip
 
+  proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
+    ## emit the matrix report whenever it changes
+    tables.`[]=`(matrix, p, s)
+    checkpoint matrix
+
   proc perform(matrix: var Matrix; profiles: seq[Profile]) =
     ## try to run a bunch of profiles and fail early if you can
     var profiles = profiles
@@ -868,9 +873,6 @@ when isMainModule:
         checkpoint "error: already ran `" & $p & "`"
         quit 1
       matrix[p] = perform p
-
-      # for now, output the matrix after every test
-      checkpoint matrix
 
       if matrix[p] > Part:
         case $NimMajor & "." & $NimMinor
@@ -901,8 +903,7 @@ when isMainModule:
   proc profiles(fn: string): seq[Profile] =
     ## produce profiles for a given test filename
     for opt in opt.keys:
-      # omit debug on ci
-      if not ci or opt > debug:
+      if not ci or opt > debug:         # omit debug on ci
         for gc in gc.items:
           for cp in cp.items:
             var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
