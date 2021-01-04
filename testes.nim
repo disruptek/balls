@@ -883,10 +883,11 @@ when isMainModule:
         if ci and failFast:
           if p.cp != cpp:
             # before we fail the ci, run a debug test for shits and grins
-            var n = p
-            n.opt = debug
-            discard perform n
-            matrix[n] = Info
+            if p.opt > debug:
+              var n = p
+              n.opt = debug
+              discard perform n
+              matrix[n] = Info
             quit 1
         break
 
