@@ -855,11 +855,18 @@ when isMainModule:
     else:
       result = Fail
 
+  proc isNovel(p: Profile; matrix: Matrix): bool =
+    ## guard against my stupidity
+    matrix.getOrDefault(p, Skip) != Skip
+
   proc perform(matrix: var Matrix; profiles: seq[Profile]) =
     ## try to run a bunch of profiles and fail early if you can
     var profiles = profiles
     sort(profiles, cmp)         # order the profiles
     for p in profiles.mitems:
+      if p.isNovel matrix:
+        checkpoint "error: already ran `" & $p & "`"
+        quit 1
       matrix[p] = perform p
 
       # for now, output the matrix after every test
@@ -883,9 +890,9 @@ when isMainModule:
         if ci and failFast:
           if p.cp != cpp:
             # before we fail the ci, run a debug test for shits and grins
-            if p.opt > debug:
-              var n = p
-              n.opt = debug
+            var n = p
+            n.opt = debug
+            if n.isNovel matrix:      # a safer solution
               discard perform n
               matrix[n] = Info
             quit 1
