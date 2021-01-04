@@ -894,10 +894,12 @@ when isMainModule:
   proc profiles(fn: string): seq[Profile] =
     ## produce profiles for a given test filename
     for opt in opt.keys:
-      for gc in gc.items:
-        for cp in cp.items:
-          var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
-          result.add profile
+      # omit debug on ci
+      if not ci or opt > debug:
+        for gc in gc.items:
+          for cp in cp.items:
+            var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
+            result.add profile
 
   proc ordered(directory: string): seq[string] =
     ## order a directory of test files usefully
