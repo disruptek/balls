@@ -1,6 +1,6 @@
 import testes
 
-testes:
+suite "a pretty suite shim":
 
   block goats:
     ## this is a test of goats

@@ -1,5 +1,3 @@
-import std/hashes
-import std/algorithm
 import std/times
 import std/os
 import std/sequtils
@@ -7,7 +5,6 @@ import std/terminal
 import std/strutils
 import std/macros
 import std/colors
-import std/streams
 
 when (NimMajor, NimMinor) >= (1, 3):
   import std/exitprocs
@@ -32,6 +29,7 @@ when defined(windows):
   export execShellCmd
 
 const
+  testesDry {.booldefine.} = false
   onCI = getEnv("GITHUB_ACTIONS", "false") == "true"
   statements {.used.} = {
     # these are not r-values
@@ -58,19 +56,39 @@ const
 
   }
 
+when testesDry:
+  const
+    emojiStack  = " ^ "
+    emojiSource = " > "
+  type
+    StatusKind = enum      ## possible test results
+      None = "      "      ## (undefined)
+      Info = "info  "      ## may prefix information
+      Pass = "pass  "      ## total success
+      Skip = "skip  "      ## test was skipped
+      Part = "part  "      ## partial success
+      Fail = "fail  "      ## assertion failure
+      Died = "died  "      ## unexpected exception
+      Oops = "oops  "      ## compiles() failed
+else:
+  const
+    emojiStack  = " 🗇 "
+    emojiSource = " 🗏 "
+  type
+    StatusKind = enum      ## possible test results
+      None = "  "          ## (undefined)
+      Info = "🔵"          ## may prefix information
+      Pass = "🟢"          ## total success
+      Skip = "❔"          ## test was skipped
+      Part = "🟡"          ## partial success
+      Fail = "🔴"          ## assertion failure
+      Died = "💥"          ## unexpected exception
+      Oops = "⛔"          ## compiles() failed
+
 type
   FailError = object of CatchableError
   SkipError = object of CatchableError
   ExpectedError = object of CatchableError
-  StatusKind = enum
-    None = "  "
-    Info = "🔵"          ## may prefix information
-    Pass = "🟢"          ## total success
-    Skip = "❔"          ## test was skipped
-    Part = "🟡"          ## partial success
-    Fail = "🔴"          ## assertion failure
-    Died = "💥"          ## unexpected exception
-    Oops = "⛔"          ## compiles() failed
 
   Test = object
     status: StatusKind    ## the result of the test
@@ -90,7 +108,12 @@ when false:
 var clock: float          ## pre-test time
 var memory: int           ## pre-test memory
 
-proc useColor(): bool = onCI or stderr.isAtty
+proc useColor(): bool =
+  ## for the bland folks; they live among us!
+  when testesDry:
+    false
+  else:
+    onCI or stderr.isAtty
 
 proc rewrite(n: NimNode; r: Rewrite): NimNode =
   ## perform a recursive rewrite (at least once) using the given mutator
@@ -262,8 +285,7 @@ proc checkpoint*(ss: varargs[string, `$`]) =
 
 proc output(n: NimNode): NimNode =
   assert not n.isNil
-  let checkpoint = bindSym"checkpoint"
-  result = newCall(checkpoint, combineLiterals(n))
+  result = newCall(bindSym"checkpoint", combineLiterals n)
 
 proc output(t: Test; n: NimNode): NimNode =
   assert not n.isNil
@@ -278,9 +300,16 @@ proc output(test: Test; styling: Styling; n: NimNode): NimNode {.used.} =
 
 proc report(n: NimNode): NimNode =
   ## render a multi-line comment
-  let prefix = $lineNumStyle & "## " & $commentStyle
-  result = output(infix(prefixLines(n, prefix),
-                  "&", newLit(resetStyle.string)))
+  var prefix = $lineNumStyle & "## " & $commentStyle
+  var postfix = newLit resetStyle.string
+  result = newTree nnkIfStmt
+  result.add:
+    nnkElifExpr.newTree(
+      newCall bindSym"useColor",
+        output infix(prefixLines(n, prefix), "&", postfix))
+  result.add:
+    nnkElse.newTree:
+      output prefixLines(n, "## ")
 
 macro report*(ss: varargs[typed]) =
   ## Like `checkpoint`, but rendered as a comment.
@@ -333,7 +362,7 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
     let line = align($s.line, 5)
     result.add "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle,
       line, code, $s.procname, $lineNumStyle, $sourceStyle, $viaProcStyle ]
-  checkpoint result.join("\n").prefixLines prefix & " 🗇 "
+  checkpoint result.join("\n").prefixLines prefix & emojiStack
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
   ## output the stack trace of a test, and perhaps that of any exception
@@ -352,7 +381,7 @@ proc renderSource(t: Test): NimNode =
     if node[0].kind == nnkCommentStmt:
       let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
       node[0] = newCommentStmtNode(dropFirst)
-  result = t.output(repr(node).numberLines(info.line).prefixLines(" 🗏 "))
+  result = t.output(repr(node).numberLines(info.line).prefixLines emojiSource)
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
   let setResult = bindSym"setProgramResult"
@@ -661,7 +690,7 @@ proc findName(n: NimNode; index: int): string =
   else:
     result = repr(n)
 
-proc flushStderr() {.noconv.} = flushFile stderr
+proc flushStderr() {.noconv, used.} = flushFile stderr
 
 macro testes*(tests: untyped) =
   ## For a good time, put each test in a `block:` underneath the `testes`.
@@ -681,15 +710,21 @@ macro testes*(tests: untyped) =
       var n = n.rewriteTestBlock
       var test: Test
       if n.kind == nnkCommentStmt:
-        let prefix = $lineNumStyle & "## " & $commentStyle
-        result.add output(infix(prefixLines(n, prefix),
-                                "&", newLit(resetStyle.string)))
+        result.add: report n           # report comments
       else:
-        let name = findName(n, index)
-        test = makeTest(n, name)
-        result.add test.n
+        let name = findName(n, index)  # discover the test name
+        test = makeTest(n, name)       # create the test
+        result.add test.n              # add the test body
   finally:
     result.add reportResults()
+
+macro test*(name: string; body: untyped) =
+  ## A compatibility shim for adapting `std/unittest` syntax.
+  newBlockStmt(genSym(nskLabel, name.strVal), body)
+
+macro suite*(name: string; body: untyped) =
+  ## A compatibility shim for adapting `std/unittest` syntax.
+  newCall(bindSym"testes", body)
 
 # unused code that may move back into service
 when false:
@@ -720,7 +755,7 @@ when false:
           break
 
 when isMainModule:
-  import std/[strutils, tables, os, osproc]
+  import std/[strutils, tables, os, osproc, hashes, algorithm]
 
   const
     directory = "tests"
@@ -761,8 +796,8 @@ when isMainModule:
     cmper opt
     cmper gc
 
-  proc `<`(a, b: Profile): bool = cmp(a, b) == -1
-  proc `==`(a, b: Profile): bool = cmp(a, b) == 0
+  proc `<`(a, b: Profile): bool {.used.} = cmp(a, b) == -1
+  proc `==`(a, b: Profile): bool {.used.} = cmp(a, b) == 0
 
   proc hints(p: Profile; ci: bool): string =
     ## compute --hint(s) as appropriate

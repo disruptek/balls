@@ -28,11 +28,12 @@ Because `testament` and `testutils` are going nowhere fast.
 ## Notable Mentions
 
 - With `--define:release`, _all code_ **must** compile.
+- With `--define:testesDry`, no color or emojis are output.
 
 ## Test Runner Usage
 
 You can now run `testes` to run a limited local test matrix against the current
-compiler -- the matrix is expanded automatically on GitHub Actions CI.  This
+compiler -- the matrix is expanded automatically on GitHub Actions CI. This
 runtime will simply build and invoke any `t*.nim` found beneath the `tests`
 subdirectory.
 
@@ -47,7 +48,7 @@ Here's a set of example tests which will pass (and fail) in interesting ways.
 ```nim
 import testes
 
-testes:
+suite "a pretty suite shim":
 
   block goats:
     ## this is a test of goats
