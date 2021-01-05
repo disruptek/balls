@@ -821,10 +821,15 @@ when isMainModule:
   # options common to all profiles
   var defaults = @["""--path=".""""]  # work around early nim behavior
 
+  if (NimMajor, NimMinor) >= (1, 5):
+    # always use IC if it's available
+    defaults.add "--incremental:on"
+  elif ci:
+    # otherwise, force rebuild only on CI
+    defaults.add "--forceBuild:on"
+
   # remote ci expands the matrix
   if ci:
-    # always rebuild on the CI, but not locally
-    defaults.add "--forceBuild:on"
     cp.add cpp                  # add cpp
     gc.incl refc                # add refc
     gc.incl markAndSweep        # add markAndSweep
