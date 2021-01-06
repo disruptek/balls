@@ -909,7 +909,7 @@ when isMainModule:
     var profiles = profiles
     sort(profiles, cmp)         # order the profiles
     for p in profiles.mitems:
-      if p.isNovel matrix:
+      if not p.isNovel matrix:
         checkpoint "error: already ran `" & $p & "`"
         quit 1
       matrix[p] = perform p
