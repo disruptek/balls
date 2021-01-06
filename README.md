@@ -25,9 +25,13 @@ Because `testament` and `testutils` are going nowhere fast.
 - easier test reordering, built-in timing, mem stats
 - smaller, more self-evident testing macro
 
-## Notable Mentions
+## FAQ
 
-- With `--define:release`, _all code_ **must** compile.
+If you're wondering why you cannot see compiler error messages for a particular
+test that fails to compile, note that we use `compiles()` to swallow errors and
+allow subsequent tests to get executed, but only outside of `--define:release`.
+
+- With `--define:release`, compiler errors are fatal.
 - With `--define:testesDry`, no color or emojis are output.
 
 ## Test Runner Usage
