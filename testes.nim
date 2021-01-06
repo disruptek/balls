@@ -888,7 +888,7 @@ when isMainModule:
     # add the hints into the invocation ahead of the filename
     run.add hs & " " & p.fn
 
-    # run it and record the result in the matrix
+    # run it and return the result
     let code = attempt run
     if code == 0:
       result = Pass
@@ -897,7 +897,7 @@ when isMainModule:
 
   proc isNovel(p: Profile; matrix: Matrix): bool =
     ## guard against my stupidity
-    matrix.getOrDefault(p, Skip) != Skip
+    matrix.getOrDefault(p, None) in {Skip, None}
 
   proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
     ## emit the matrix report whenever it changes
