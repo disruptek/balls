@@ -236,16 +236,21 @@ proc checkOne(condition: NimNode; message: NimNode): NimNode =
     newCall(ident"newException", assertion, message)
   result = newIfStmt (newCall(ident"not", condition), clause)
 
-macro check*(body: untyped; message = "") =
-  ## Check one or more expressions (in a block); raises an AssertionDefect
-  ## in the event that the expression is `false` regardless of `assertions`
-  ## settings.  Optionally specify a custom message a la `assert`.
-  if body.kind == nnkStmtList:
-    result = newStmtList()
-    for child in body.items:
-      result.add: checkOne(child, message)
-  else:
-    result = checkOne(body, message)
+macro check*(body: bool; message: string = "") =
+  ## Check a single expression; raises an AssertionDefect in the event
+  ## that the expression is `false` regardless of `assertions` settings.
+  ## Specify a custom `message` a la `assert`.
+  result = checkOne(body, message)
+
+macro check*(message: string; body: untyped) =
+  ## Check one or more expressions in a block; raises an AssertionDefect
+  ## in the event that an expression is `false` regardless of `assertions`
+  ## settings.  Specify a custom `message` a la `assert`.
+  body.expectKind nnkStmtList
+  result = newStmtList()
+  for child in body.items:
+    result.add:
+      newCall(bindSym"check", child, message)
 
 proc `status=`(t: var Test; s: StatusKind) {.used.} =
   system.`=`(t.status, max(t.status, s))

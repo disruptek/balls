@@ -29,7 +29,7 @@ testes:
 
   block:
     ## check a list of statements in a block
-    check:
+    check "r should be 4":
       r < 5
       r > 3
 

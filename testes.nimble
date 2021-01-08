@@ -1,8 +1,8 @@
-version = "0.10.0"
+version = "1.0.0"
 author = "disruptek"
 description = "a cure for salty testes"
 license = "MIT"
-requires "nim >= 1.0.4"
+
 #requires "cligen >= 0.9.41 & <= 0.9.45"
 #requires "bump >= 1.8.18 & < 2.0.0"
 requires "https://github.com/disruptek/grok >= 0.0.4 & < 1.0.0"
