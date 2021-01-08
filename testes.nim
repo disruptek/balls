@@ -930,7 +930,7 @@ when isMainModule:
         discard execCmd "nim --version"
         # don't quit when run locally; just keep chugging away
         if ci and failFast:
-          if p.cp != cpp:
+          if p.cp != cpp and p.gc notin {arc, orc}:
             # before we fail the ci, run a debug test for shits and grins
             var n = p
             n.opt = debug
