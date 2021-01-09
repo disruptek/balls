@@ -31,7 +31,7 @@ If you're wondering why you cannot see compiler error messages for a particular
 test that fails to compile, note that we use `compiles()` to swallow errors and
 allow subsequent tests to get executed, but only outside of `--define:release`.
 
-- With `--define:release`, compiler errors are fatal.
+- With `--define:release`, compiler errors are fatal and output to console.
 - With `--define:testesDry`, no color or emojis are output.
 
 ## Test Runner Usage
