@@ -30,7 +30,7 @@ when defined(windows):
 
 const
   testesDry {.booldefine.} = false
-  onCI = getEnv("GITHUB_ACTIONS", "false") == "true"
+  onCI {.used.} = getEnv("GITHUB_ACTIONS", "false") == "true"
   statements {.used.} = {
     # these are not r-values
 
@@ -103,8 +103,6 @@ type
 
   Rewrite = proc(n: NimNode): NimNode
 
-when false:
-  var tests: seq[Test]      ## all the tests
 var clock: float          ## pre-test time
 var memory: int           ## pre-test memory
 
@@ -113,18 +111,31 @@ proc useColor(): bool =
   when testesDry:
     false
   else:
-    onCI or stderr.isAtty
+    when nimvm:
+      # don't try to mess with styling at compile-time
+      true
+    else:
+      # at runtime, try to emit style if possible
+      onCI or stderr.isAtty
 
 proc rewrite(n: NimNode; r: Rewrite): NimNode =
   ## perform a recursive rewrite (at least once) using the given mutator
   result = r(n)
   if result.isNil:
     result = copyNimNode n
-    for kid in items(n):
+    for kid in n.items:
       result.add rewrite(kid, r)
     let second = r(result)
     if not second.isNil:
       result = second
+
+proc filter*(n: NimNode; f: Rewrite): NimNode =
+  ## perform a recursive rewrite (only once) using the given mutator
+  result = f(n)
+  if result.isNil:
+    result = copyNimNode n
+    for kid in n.items:
+      result.add filter(kid, f)
 
 proc `&`(a, b: Styling): Styling {.borrow.}
 proc `&`(a: Styling; b: string): Styling = a & Styling(b)
@@ -161,15 +172,10 @@ when defined(release): # avoid unused warnings
                     Styling ansiForegroundColorCode(fgYellow, true)
 
 proc `$`(style: Styling): string =
-  when nimvm:
-    # don't try to mess with styling at compile-time
+  if useColor():
     result = style.string
-  else:
-    # at runtime, try to emit style if possible
-    if useColor():
-      result = style.string
-      if result != resetStyle.string:
-        result = resetStyle.string & result
+    if result != resetStyle.string:
+      result = resetStyle.string & result
 
 proc dollar(n: NimNode): NimNode =
   ## If it's not a string literal, dollar it.
@@ -178,7 +184,7 @@ proc dollar(n: NimNode): NimNode =
   elif n.kind == nnkCall and $n[0] in ["$", "&"]:
     result = n
   else:
-    result = newCall(ident"$", n)
+    result = newCall(bindSym"$", n)
 
 proc combineLiterals(n: NimNode): NimNode =
   ## merges "foo" & "bar" into "foobar"
@@ -220,38 +226,6 @@ proc incResults(test: Test): NimNode =
   newCall ident"inc":
     nnkBracketExpr.newTree(bindSym"testResults", newLit test.status.ord)
 
-proc checkOne(condition: NimNode; message: NimNode): NimNode =
-  ## generate a simple check statement with optional exception message
-  let assertion =
-    when hasDefects:
-      ident"AssertionDefect"
-    else:
-      ident"AssertionError"
-  var message =
-    if message.kind == nnkStrLit and message.strVal == "":
-      newLit condition.repr
-    else:
-      message
-  var clause = nnkRaiseStmt.newTree:
-    newCall(ident"newException", assertion, message)
-  result = newIfStmt (newCall(ident"not", condition), clause)
-
-macro check*(body: bool; message: string = "") =
-  ## Check a single expression; raises an AssertionDefect in the event
-  ## that the expression is `false` regardless of `assertions` settings.
-  ## Specify a custom `message` a la `assert`.
-  result = checkOne(body, message)
-
-macro check*(message: string; body: untyped) =
-  ## Check one or more expressions in a block; raises an AssertionDefect
-  ## in the event that an expression is `false` regardless of `assertions`
-  ## settings.  Specify a custom `message` a la `assert`.
-  body.expectKind nnkStmtList
-  result = newStmtList()
-  for child in body.items:
-    result.add:
-      newCall(bindSym"check", child, message)
-
 proc `status=`(t: var Test; s: StatusKind) {.used.} =
   system.`=`(t.status, max(t.status, s))
 
@@ -269,9 +243,11 @@ proc prefixLines(s: NimNode; p: string): NimNode =
     ss = newStmtList()
     for line in items(splitLines(s.strVal, keepEol = true)):
       ss.add line.newLit
-  else:
+  of nnkStmtList:
     ss = s
-  for line in items(ss):
+  else:
+    ss = newStmtList s
+  for line in ss.items:
     result.add infix(p.newLit, "&", line)
   result = nestList(ident"&", result)
 
@@ -303,7 +279,7 @@ proc output(test: Test; styling: Styling; n: NimNode): NimNode {.used.} =
   result = newCall(prefixer, dollar(n), newLit($test.status & " "))
   result = test.output(styling & result)
 
-proc report(n: NimNode): NimNode =
+macro report(n: string) =
   ## render a multi-line comment
   var prefix = $lineNumStyle & "## " & $commentStyle
   var postfix = newLit resetStyle.string
@@ -311,10 +287,84 @@ proc report(n: NimNode): NimNode =
   result.add:
     nnkElifExpr.newTree(
       newCall bindSym"useColor",
-        output infix(prefixLines(n, prefix), "&", postfix))
+      output infix(prefixLines(n, prefix), "&", postfix))
   result.add:
     nnkElse.newTree:
       output prefixLines(n, "## ")
+
+proc report(n: NimNode): NimNode =
+  result = getAst(report n)
+
+proc niceKind(n: NimNode): NimNode =
+  expectKind(n, nnkSym)
+  let kind = $n.symKind
+  result = newLit toLowerAscii(kind[3..^1])
+
+proc localPath(fn: string): string =
+  when nimvm:
+    relativePath(fn, getProjectPath())
+    #extractFilename fn
+  else:
+    relativePath(fn, getCurrentDir())
+
+proc renderFilename(s: LineInfo): string =
+  result = "$1$3$2$1" % [ $resetStyle,
+                          localPath($s.filename),
+                          $viaFileStyle ]
+
+proc renderFilenameAndLine(s: LineInfo): string =
+  result = "$1$2$3$1$4 line $5$1" % [ $resetStyle,
+                          $viaFileStyle, localPath($s.filename),
+                          $commentStyle, $s.line ]
+
+proc renderFilename(s: StackTraceEntry): string =
+  renderFilename LineInfo(filename: $s.filename, line: s.line)
+
+proc revealSymbol(n: NimNode): NimNode =
+  ## produce a useful emission for the symbol
+  let
+    reveal = bindSym"report"
+    #impl = getTypeImpl n         # just
+    sym = getImpl n              # the
+    typ = getType n              # usual
+    #inst = getTypeInst n        # suspects
+
+  case n.symKind
+  of nskVar, nskLet, nskParam:
+    reveal.newCall:
+      bindSym"&".nestList:
+        # checkpoint kind: x = 32
+        newStmtList: [
+          niceKind n,
+          newLit" ",
+          newLit repr(n),
+          newLit": ",
+          newLit repr(typ),
+          newLit" = ",
+          newCall(ident"repr", n),
+        ]
+  of nskProc:
+    reveal.newCall:
+      bindSym"&".nestList:
+        # checkpoint proc: x location
+        newStmtList: [
+          niceKind n,
+          newLit" ",
+          newLit repr(n),
+          newLit" from ",
+          newLit renderFilenameAndLine(sym.lineInfoObj),
+        ]
+  else:
+    reveal.newCall:
+      bindSym"&".nestList:
+        # checkpoint kind: x
+        newStmtList: [
+          niceKind n,
+          newLit" ",
+          newLit repr(n),
+          newLit": ",
+          newLit repr(typ),
+        ]
 
 macro report*(ss: varargs[typed]) =
   ## Like `checkpoint`, but rendered as a comment.
@@ -330,6 +380,55 @@ macro report*(ss: varargs[typed]) =
       newEmptyNode()
     else:
       report newCommentStmtNode(s)
+
+proc checkOne(condition: NimNode; message: NimNode): NimNode =
+  ## generate a simple check statement with optional exception message
+  let assertion =
+    when hasDefects:
+      ident"AssertionDefect"
+    else:
+      ident"AssertionError"
+  var message =
+    if message.kind == nnkStrLit and message.strVal == "":
+      newLit condition.repr
+    else:
+      message
+
+  # collect the symbols we want to display
+  var symbolReport = newStmtList()
+
+  # use a filter with a side-effect to populate the list
+  proc showSymbols(n: NimNode): NimNode =
+    if n.kind == nnkSym:
+      symbolReport.add:
+        revealSymbol n
+
+  # run the filter to pull out the interesting symbols
+  discard filter(condition, showSymbols)
+
+  #echo repr(symbolReport)
+  var clause = newStmtList()
+  clause.add symbolReport
+  clause.add:
+    nnkRaiseStmt.newTree:
+      newCall(ident"newException", assertion, message)
+  result = newIfStmt (newCall(ident"not", condition), clause)
+
+macro check*(body: bool; message: string = "") =
+  ## Check a single expression; raises an AssertionDefect in the event
+  ## that the expression is `false` regardless of `assertions` settings.
+  ## Specify a custom `message` a la `assert`.
+  result = checkOne(body, message)
+
+macro check*(message: string; body: untyped) =
+  ## Check one or more expressions in a block; raises an AssertionDefect
+  ## in the event that an expression is `false` regardless of `assertions`
+  ## settings.  Specify a custom `message` a la `assert`.
+  body.expectKind nnkStmtList
+  result = newStmtList()
+  for child in body.items:
+    result.add:
+      newCall(bindSym"check", child, message)
 
 proc success(t: var Test): NimNode =
   ## what to do when a test is successful
@@ -355,14 +454,12 @@ proc findWhere(s: string; p: string; into: var string): bool {.used.} =
 
 proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
   ## stylishly render a stack trace
-  var path = getCurrentDir()
   var cf: string
   var result: seq[string]
-  for s in items(stack):
+  for s in stack.items:
     if cf != $s.filename:
       cf = $s.filename
-      result.add "$1$3$2$1" % [ $resetStyle,
-        relativePath(cf, path), $viaFileStyle ]
+      result.add renderFilename(s)
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
     result.add "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle,
@@ -517,7 +614,7 @@ proc ctor(test: Test): NimNode =
 when defined(release):
   proc pad(n: NimNode; size: int): NimNode =
     let align = bindSym"align"
-    result = newCall(align, newCall(ident"$", n), size.newLit)
+    result = newCall(align, newCall(bindSym"$", n), size.newLit)
 
   proc humanize(n: NimNode): NimNode =
     ## convert bytes to human-readable form
@@ -571,7 +668,6 @@ proc postTest(test: Test): NimNode =
   when false:
     let tests = bindSym"tests"
     result.add newCall(ident"add", tests, temp)
-
 
 proc compilerr(t: var Test): NimNode {.used.} =
   ## the compiler wasn't able to compile the test

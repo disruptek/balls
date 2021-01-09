@@ -25,7 +25,7 @@ testes:
     ## this block exists only to test inclusion of
     ## comments in the test code display...
     check r == 3
-    echo r
+    echo r, " will not be output"
 
   block:
     ## check a list of statements in a block
