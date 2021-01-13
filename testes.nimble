@@ -3,10 +3,8 @@ author = "disruptek"
 description = "a cure for salty testes"
 license = "MIT"
 
-#requires "cligen >= 0.9.41 & <= 0.9.45"
-#requires "bump >= 1.8.18 & < 2.0.0"
-requires "https://github.com/disruptek/grok >= 0.0.4 & < 1.0.0"
-requires "https://github.com/juancarlospaco/nim-bytes2human"
+# requires kute & co.
+requires "https://github.com/disruptek/grok >= 0.3.0 & < 1.0.0"
 
 bin = @["testes"]           # build the binary for basic test running
 installExt = @["nim"]       # we need to install testes.nim also

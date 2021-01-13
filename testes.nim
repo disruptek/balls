@@ -20,10 +20,7 @@ else:
 
 import grok/mem
 import grok/time
-
-when defined(danger):
-  # we only need this for danger tests
-  import bytes2human
+import grok/kute
 
 when defined(windows):
   export execShellCmd
@@ -621,18 +618,19 @@ when defined(danger):
 
   proc humanize(n: NimNode): NimNode =
     ## convert bytes to human-readable form
-    template abs(n: NimNode): NimNode = newCall(bindSym"abs", n)
-    let human = bindSym"bytes2human"
+    template abs(n: NimNode): NimNode =
+      newCall(bindSym"abs", n)
+    template kute(n: untyped): NimNode =
+      newCall(bindSym"$", newCall(bindSym"Kute", n))
     result = nnkIfExpr.newTree
     result.add:
       nnkElifBranch.newTree(
         infix(n, ">", 0.newLit),
-        infix(newLit"+", "&", newDotExpr(newCall(human, n), ident"short")))
+        infix(newLit"+", "&", kute(n)))
     result.add:
       nnkElifBranch.newTree(infix(n, "==", 0.newLit), newLit"")
     result.add:
-      nnkElse.newTree infix(newLit"-", "&",
-                            newDotExpr(newCall(human, abs n), ident"short"))
+      nnkElse.newTree infix(newLit"-", "&", kute(abs n))
 
 proc postTest(test: Test): NimNode =
   ## run this after a test has completed
