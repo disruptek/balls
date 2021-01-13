@@ -919,7 +919,7 @@ when isMainModule:
   }.toTable
   var cp = @[c]
   # the default gc varies with version
-  var gc = {}
+  var gc: set[MemModel] = {}
   when (NimMajor, NimMinor) >= (1, 2):
     gc.add arc
     # panics:on is absent in 1.0
