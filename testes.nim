@@ -919,13 +919,13 @@ when isMainModule:
   }.toTable
   var cp = @[c]
   # the default gc varies with version
-  var gc: set[MemModel] = {}
+  var gc: set[MemModel]
   when (NimMajor, NimMinor) >= (1, 2):
-    gc.add arc
+    gc.incl arc
     # panics:on is absent in 1.0
     opt[danger].add "--panics:on"
   else:
-    gc.add refc
+    gc.incl refc
   # options common to all profiles
   var defaults = @["""--path=".""""]  # work around early nim behavior
 
