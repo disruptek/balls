@@ -21,8 +21,8 @@ else:
 import grok/mem
 import grok/time
 
-when defined(release):
-  # we only need this for release tests
+when defined(danger):
+  # we only need this for danger tests
   import bytes2human
 
 when defined(windows):
@@ -166,7 +166,7 @@ const
   viaFileStyle    = Styling ansiStyleCode(styleItalic) &
                     Styling ansiStyleCode(styleUnderscore) &
                     Styling ansiForegroundColorCode(fgBlue, true)
-when defined(release): # avoid unused warnings
+when defined(danger): # avoid unused warnings
   const
     testNumStyle  = Styling ansiStyleCode(styleItalic) &
                     Styling ansiForegroundColorCode(fgYellow, true)
@@ -611,7 +611,7 @@ proc ctor(test: Test): NimNode =
     when value isnot ref:
       result.add composeColon(ident(name), value)
 
-when defined(release):
+when defined(danger):
   proc pad(n: NimNode; size: int): NimNode =
     let align = bindSym"align"
     result = newCall(align, newCall(bindSym"$", n), size.newLit)
@@ -637,7 +637,7 @@ proc postTest(test: Test): NimNode =
   let temp = genSym(nskVar, "test")
   result.add newVarStmt(temp, ctor(test))
 
-  when defined(release):
+  when defined(danger):
     let tempClock = newDotExpr(temp, ident"clock")
     let tempMem = newDotExpr(temp, ident"memory")
 
@@ -903,7 +903,8 @@ when isMainModule:
   proc hints(p: Profile; ci: bool): string =
     ## compute --hint(s) as appropriate
     var omit = @["Cc", "Link", "Conf", "Processing", "Exec"]
-    if ci or p.opt notin {release, danger}:
+    # ignore performance warnings outside of local danger builds
+    if ci or p.opt notin {danger}:
       omit.add "Performance"
     for hint in omit.items:
       result.add " --hint[$#]=off" % [ hint ]
@@ -911,7 +912,11 @@ when isMainModule:
   let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
   var matrix: Matrix
   # set some default matrix members (profiles)
-  var opt = {debug: @["--debuginfo", "--stackTrace:on"]}.toTable
+  var opt = {
+    debug: @["--debuginfo", "--stackTrace:on"],
+    release: @["--define:release", "--stackTrace:on"],
+    danger: @["--define:danger", "--panics:on"],
+  }.toTable
   var cp = @[c]
   # the default gc varies with version
   var gc =
@@ -937,12 +942,9 @@ when isMainModule:
     if arc in gc:               # add orc if arc is available
       if (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
         gc.incl orc
-    for o in {release, danger}: # add other optimization levels
-      opt[o] = opt.getOrDefault(o, @[]) & @["--define:" & $o]
   else:
-    # do a danger build locally so we can check time/space
-    for o in {danger}:          # add other optimization levels
-      opt[o] = opt.getOrDefault(o, @[]) & @["--define:" & $o]
+    # do a danger build locally so we can check time/space; omit release
+    opt.del release
 
   proc attempt(cmd: string): int =
     ## attempt execution of a random command; returns the exit code
