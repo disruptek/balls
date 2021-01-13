@@ -341,7 +341,10 @@ proc revealSymbol(n: NimNode): NimNode =
           newLit": ",
           newLit repr(typ),
           newLit" = ",
-          newCall(ident"repr", n),
+          when defined(gcArc) or defined(gcOrc):
+            newLit" (unsupported on arc/orc)"
+          else:
+            newCall(ident"repr", n)
         ]
   of nskProc:
     reveal.newCall:
