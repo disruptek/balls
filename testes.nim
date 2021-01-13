@@ -826,7 +826,7 @@ when isMainModule:
   # options common to all profiles
   var defaults = @["""--path=".""""]  # work around early nim behavior
 
-  if (NimMajor, NimMinor) >= (1, 5):
+  if (NimMajor, NimMinor) >= (1, 6):
     # always use IC if it's available
     defaults.add "--incremental:on"
   elif ci:
