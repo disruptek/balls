@@ -915,15 +915,17 @@ when isMainModule:
   var opt = {
     debug: @["--debuginfo", "--stackTrace:on"],
     release: @["--define:release", "--stackTrace:on"],
-    danger: @["--define:danger", "--panics:on"],
+    danger: @["--define:danger"],
   }.toTable
   var cp = @[c]
   # the default gc varies with version
-  var gc =
-    when (NimMajor, NimMinor) >= (1, 2):
-      {arc}
-    else:
-      {refc}
+  var gc = {}
+  when (NimMajor, NimMinor) >= (1, 2):
+    gc.add arc
+    # panics:on is absent in 1.0
+    opt[danger].add "--panics:on"
+  else:
+    gc.add refc
   # options common to all profiles
   var defaults = @["""--path=".""""]  # work around early nim behavior
 
@@ -933,6 +935,8 @@ when isMainModule:
   elif ci:
     # otherwise, force rebuild only on CI
     defaults.add "--forceBuild:on"
+    # force incremental off so as not to get confused by a config file
+    defaults.add "--incremental:off"
 
   # remote ci expands the matrix
   if ci:
