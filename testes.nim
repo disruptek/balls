@@ -927,7 +927,9 @@ when isMainModule:
   when (NimMajor, NimMinor) >= (1, 2):
     gc.incl arc
     # panics:on is absent in 1.0
-    opt[danger].add "--panics:on"
+    if not ci:
+      # and it's not something we're ready to break the world over
+      opt[danger].add "--panics:on"
   else:
     gc.incl refc
   # options common to all profiles
