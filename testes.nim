@@ -905,7 +905,8 @@ when isMainModule:
 
   proc hints(p: Profile; ci: bool): string =
     ## compute --hint(s) as appropriate
-    var omit = @["Cc", "Link", "Conf", "Processing", "Exec"]
+    var omit = @["Cc", "Link", "Conf", "Processing", "Exec",
+                 "XDeclaredButNotUsed"]
     # ignore performance warnings outside of local danger builds
     if ci or p.opt notin {danger}:
       omit.add "Performance"
