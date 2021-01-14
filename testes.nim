@@ -1065,15 +1065,16 @@ when isMainModule:
 
   proc ordered(directory: string; testsOnly = true): seq[string] =
     ## order a directory of test files usefully
-    # collect the filenames
-    for kind, test in walkDir directory:
-      if kind in {pcFile, pcLinkToFile}:
-        if testsOnly:
-          if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
-            result.add test
-        else:
-          if test.endsWith(".nim") or test.endsWith(".nims"):
-            result.add test
+    if testsOnly:
+      # collect the filenames recursively, but only .nim
+      for test in walkDirRec(directory, yieldFilter = {pcFile, pcLinkToFile}):
+        if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
+          result.add test
+    else:
+      # don't recurse; just collect files, but also consume .nims
+      for kind, test in walkDir directory:
+        if test.endsWith(".nim") or test.endsWith(".nims"):
+          result.add test
 
     # if we're not in strict mode,
     if not testsOnly:
