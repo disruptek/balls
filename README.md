@@ -6,11 +6,12 @@
 [![License](https://img.shields.io/github/license/disruptek/testes?style=flat)](#license)
 [![buy me a coffee](https://img.shields.io/badge/donate-buy%20me%20a%20coffee-orange.svg)](https://www.buymeacoffee.com/disruptek)
 
-A small unittest macro with some features I needed.
+A unittest macro to save the world.
 
-## Why
+## Why?
 
-Because `testament` and `testutils` are going nowhere fast.
+There's a want to centralize and reuse the logic that determines what code is
+deemed successful and how we go about measuring this.
 
 ## Goals
 
@@ -24,6 +25,7 @@ Because `testament` and `testutils` are going nowhere fast.
 - individual tests don't even have to compile
 - easier test reordering, built-in timing, mem stats
 - smaller, more self-evident testing macro
+- no options means, "what would disruptek do?"
 
 ## FAQ
 
@@ -38,11 +40,21 @@ allow subsequent tests to get executed, but only outside of `--define:release`.
 
 You can now run `testes` to run a limited local test matrix against the current
 compiler -- the matrix is expanded automatically on GitHub Actions CI. This
-runtime will simply build and invoke any `t*.nim` found beneath the `tests`
-subdirectory.
+runtime will try to guess how to test your project regardless of its structure, but you can help narrow what it chooses to compile by...
+
+- placing files matching `t*.nim` under a `tests` subdirectory, or
+- having a single file `foo.nim` in your `foo` project, or
+- TBD
 
 ```
 $ testes
+# ... the test runner runs tests ...
+```
+You can add arguments which will be passed directly to the compiler:
+
+```
+$ testes --styleCheck:error
+# ... all tests are compiled with --styleCheck:error ...
 ```
 
 ## Test Library Usage

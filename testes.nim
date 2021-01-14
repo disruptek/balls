@@ -1,3 +1,4 @@
+import std/options
 import std/times
 import std/os
 import std/sequtils
@@ -21,6 +22,7 @@ else:
 import grok/mem
 import grok/time
 import grok/kute
+import ups/sanitize
 
 when defined(windows):
   export execShellCmd
@@ -1007,9 +1009,9 @@ when isMainModule:
     else:
       result = Fail
 
-  proc isNovel(p: Profile; matrix: Matrix): bool =
+  proc contains(matrix: Matrix; p: Profile): bool =
     ## guard against my stupidity
-    matrix.getOrDefault(p, None) in {Skip, None}
+    matrix.getOrDefault(p, None) notin {Skip, None}
 
   proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
     ## emit the matrix report whenever it changes
@@ -1021,7 +1023,7 @@ when isMainModule:
     var profiles = profiles
     sort(profiles, cmp)         # order the profiles
     for p in profiles.mitems:
-      if not p.isNovel matrix:
+      if p in matrix:
         checkpoint "error: already ran `" & $p & "`"
         quit 1
       matrix[p] = perform p
@@ -1046,7 +1048,7 @@ when isMainModule:
             # before we fail the ci, run a debug test for shits and grins
             var n = p
             n.opt = debug
-            if n.isNovel matrix:      # a safer solution
+            if n notin matrix:      # a safer solution
               discard perform n
               matrix[n] = Info
             quit 1
@@ -1061,12 +1063,70 @@ when isMainModule:
             var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
             result.add profile
 
-  proc ordered(directory: string): seq[string] =
+  proc ordered(directory: string; testsOnly = true): seq[string] =
     ## order a directory of test files usefully
     # collect the filenames
-    for test in directory.walkDirRec(yieldFilter = {pcFile, pcLinkToFile}):
-      if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
-        result.add test
+    for kind, test in walkDir directory:
+      if kind in {pcFile, pcLinkToFile}:
+        if testsOnly:
+          if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
+            result.add test
+        else:
+          if test.endsWith(".nim") or test.endsWith(".nims"):
+            result.add test
+
+    # if we're not in strict mode,
+    if not testsOnly:
+      type
+        # just documentation for now...
+        Sig = enum
+          Zero = "no files match the provided extension"
+          One  = "one file matches and it shares the name of the project"
+          Many = "multiple files exist for the given extension"
+
+      proc matching(among: seq[string]; pro: string): seq[string] =
+        ## pluck out files from `among` which match the project name
+        const
+          useCaps = true
+        let proj = sanitizeIdentifier(pro, capsOkay = useCaps)
+        if proj.isNone:
+          # the current directory isn't a sane identifier 🙄
+          return @[]
+        else:
+          for file in among.items:
+            let splat = file.extractFilename.splitFile
+            let name = sanitizeIdentifier(splat.name, capsOkay = useCaps)
+            if name.isSome:
+              if name.get == proj.get:
+                result.add file
+
+      let proj = extractFilename getCurrentDir()
+      var promatches = matching(result, proj)
+      sort promatches
+      for ext in [".nim", ".nims"]:
+        # these are files that match the given extension
+        var files = filterIt(result, it.splitFile.ext == ext)
+
+        # collect the instances of these that share the same import name
+        var matches = matching(files, proj)
+        sort matches
+
+        # some of these scenarios will cause us to skip changing the result,
+        # while others will cause us to replace the result list with one file
+        if files.len == 0:                                    # Zero
+          continue
+        elif matches.len == 1:                                # One
+          discard
+        elif matches.len > 0 and matches == promatches:       # One
+          # XXX: for now, we ignore x.nims in x.(nims|nim)
+          discard
+          #continue
+        else:                                                 # Many
+          continue
+
+        # we want a single file; the best of the project-named files
+        result = @[matches[0]]
+        break
 
     # sort them by age, recently-changed first
     proc age(path: string): Time =
@@ -1075,7 +1135,14 @@ when isMainModule:
     result.sort(byAge, Descending)
 
   # run each test in tests/ (or whatever) in a useful order
-  for test in ordered directory:
+  var tests = ordered directory
+  # if there are no tests in a tests/ directory,
+  if tests.len == 0:
+    # try to find something good to run in the project directory
+    tests = ordered(getCurrentDir(), testsOnly = false)
+
+  # run the best input you found in the order you found it
+  for test in tests.items:
     matrix.perform test.profiles
 
 {.pop.}
