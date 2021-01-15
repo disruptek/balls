@@ -28,7 +28,7 @@ when defined(windows):
   export execShellCmd
 
 const
-  testesDry {.booldefine.} = false
+  ballsDry {.booldefine.} = false
   onCI {.used.} = getEnv("GITHUB_ACTIONS", "false") == "true"
   statements {.used.} = {
     # these are not r-values
@@ -55,7 +55,7 @@ const
 
   }
 
-when testesDry:
+when ballsDry:
   const
     emojiStack  = " ^ "
     emojiSource = " > "
@@ -107,7 +107,7 @@ var memory: int           ## pre-test memory
 
 proc useColor(): bool =
   ## for the bland folks; they live among us!
-  when testesDry:
+  when ballsDry:
     false
   else:
     when nimvm:
@@ -796,10 +796,11 @@ proc findName(n: NimNode; index: int): string =
 
 proc flushStderr() {.noconv, used.} = flushFile stderr
 
-macro testes*(tests: untyped) =
-  ## For a good time, put each test in a `block:` underneath the `testes`.
-  ## You can specify test names using `##` comment statements, or block
-  ## syntax like that of `unittests`: `test "my test name": assert true`
+macro suite*(name: string; tests: untyped) =
+  ## Put each test in a `block:` underneath the named suite. You can specify
+  ## test names using `##` comment statements, or block syntax like that
+  ## of `unittests`: `test "my test name": check true`
+
   try:
     result = newStmtList()
 
@@ -825,10 +826,6 @@ macro testes*(tests: untyped) =
 macro test*(name: string; body: untyped) =
   ## A compatibility shim for adapting `std/unittest` syntax.
   newBlockStmt(genSym(nskLabel, name.strVal), body)
-
-macro suite*(name: string; body: untyped) =
-  ## A compatibility shim for adapting `std/unittest` syntax.
-  newCall(bindSym"testes", body)
 
 # unused code that may move back into service
 when false:

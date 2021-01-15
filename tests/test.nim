@@ -1,4 +1,4 @@
-import testes
+import balls
 
 suite "a pretty suite shim":
 

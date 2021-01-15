@@ -1,12 +1,12 @@
-# testes
+# balls
 
-[![Test Matrix](https://github.com/disruptek/testes/workflows/CI/badge.svg)](https://github.com/disruptek/testes/actions?query=workflow%3ACI)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/testes?style=flat)](https://github.com/disruptek/testes/releases/latest)
+[![Test Matrix](https://github.com/disruptek/balls/workflows/CI/badge.svg)](https://github.com/disruptek/balls/actions?query=workflow%3ACI)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/balls?style=flat)](https://github.com/disruptek/balls/releases/latest)
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.0.8%2B-informational?style=flat&logo=nim)
-[![License](https://img.shields.io/github/license/disruptek/testes?style=flat)](#license)
+[![License](https://img.shields.io/github/license/disruptek/balls?style=flat)](#license)
 [![buy me a coffee](https://img.shields.io/badge/donate-buy%20me%20a%20coffee-orange.svg)](https://www.buymeacoffee.com/disruptek)
 
-A unittest macro to save the world.
+A unittest macro to save the world, or at least your Sunday.
 
 ## Why?
 
@@ -34,11 +34,11 @@ test that fails to compile, note that we use `compiles()` to swallow errors and
 allow subsequent tests to get executed, but only outside of `--define:release`.
 
 - With `--define:release`, compiler errors are fatal and output to console.
-- With `--define:testesDry`, no color or emojis are output.
+- With `--define:ballsDry`, no color or emojis are output.
 
 ## Test Runner Usage
 
-You can now run `testes` to run a limited local test matrix against the current
+You can now run `balls` to run a limited local test matrix against the current
 compiler -- the matrix is expanded automatically on GitHub Actions CI. This
 runtime will try to guess how to test your project regardless of its structure, but you can help narrow what it chooses to compile by...
 
@@ -47,13 +47,13 @@ runtime will try to guess how to test your project regardless of its structure, 
 - TBD
 
 ```
-$ testes
+$ balls
 # ... the test runner runs tests ...
 ```
 You can add arguments which will be passed directly to the compiler:
 
 ```
-$ testes --styleCheck:error
+$ balls --styleCheck:error
 # ... all tests are compiled with --styleCheck:error ...
 ```
 
@@ -62,7 +62,7 @@ $ testes --styleCheck:error
 Here's a set of example tests which will pass (and fail) in interesting ways.
 
 ```nim
-import testes
+import balls
 
 suite "a pretty suite shim":
 
@@ -120,7 +120,7 @@ suite "a pretty suite shim":
   block:
     ## hide this gory when statement
     when defined(release):
-      testes:
+      balls:
         const compile = true
         proc doesnt(c: bool) =
           if not c:
@@ -129,7 +129,7 @@ suite "a pretty suite shim":
         block:
           proc fixed() = doesnt(compile)
     else:
-      testes:
+      balls:
         block:
           proc broken() = doesnt(compile)
 
@@ -177,7 +177,7 @@ performance metrics; no failing tests are permitted in such a build.
 ![performance](docs/clean.svg "performance")
 
 ## Documentation
-See [the documentation for the testes module](https://disruptek.github.io/testes/testes.html) as generated directly from the source.
+See [the documentation for the balls module](https://disruptek.github.io/balls/balls.html) as generated directly from the source.
 
 ## License
 MIT

@@ -1,6 +1,6 @@
-import testes
+import balls
 
-testes:
+suite "suite balls":
 
   block goats:
     ## this is a test of goats
@@ -56,7 +56,7 @@ testes:
   block:
     ## hide this gory when statement
     when defined(release):
-      testes:
+      suite "fixed stuff":
         const compile = true
         proc doesnt(c: bool) =
           if not c:
@@ -65,7 +65,7 @@ testes:
         block:
           proc fixed() = doesnt(compile)
     else:
-      testes:
+      suite "broken stuff":
         block:
           proc broken() = doesnt(compile)
 
