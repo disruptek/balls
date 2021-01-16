@@ -913,6 +913,8 @@ when isMainModule:
       omit.add "Performance"
     for hint in omit.items:
       result.add " --hint[$#]=off" % [ hint ]
+    for warn in ["UnreachableCode"]:
+      result.add " --warning[$#]=off" % [ warn ]
 
   let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
   var matrix: Matrix
