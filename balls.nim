@@ -301,7 +301,10 @@ proc niceKind(n: NimNode): NimNode =
 
 proc localPath(fn: string): string =
   when nimvm:
-    relativePath(fn, getProjectPath())
+    when (NimMajor, NimMinor) == (1, 4):
+      fn
+    else:
+      relativePath(fn, getProjectPath())
     #extractFilename fn
   else:
     relativePath(fn, getCurrentDir())
