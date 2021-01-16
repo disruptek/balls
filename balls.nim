@@ -323,14 +323,15 @@ proc revealSymbol(n: NimNode): NimNode =
   ## produce a useful emission for the symbol
   let
     reveal = bindSym"report"
-    #impl = getTypeImpl n         # just
+    #impl = getTypeImpl n        # just
     sym = getImpl n              # the
-    typ = getType n              # usual
+    #typ = getType n             # usual
     #inst = getTypeInst n        # suspects
 
   case n.symKind
   of nskVar, nskLet, nskParam:
-    reveal.newCall:
+    let typ = getType n
+    result = reveal.newCall:
       bindSym"&".nestList:
         # checkpoint kind: x = 32
         newStmtList: [
@@ -341,12 +342,12 @@ proc revealSymbol(n: NimNode): NimNode =
           newLit repr(typ),
           newLit" = ",
           when defined(gcArc) or defined(gcOrc):
-            newLit" (unsupported on arc/orc)"
+            newLit"(unsupported on arc/orc)"
           else:
             newCall(ident"repr", n)
         ]
-  of nskProc:
-    reveal.newCall:
+  of nskProc, nskFunc:
+    result = reveal.newCall:
       bindSym"&".nestList:
         # checkpoint proc: x location
         newStmtList: [
@@ -357,7 +358,7 @@ proc revealSymbol(n: NimNode): NimNode =
           newLit renderFilenameAndLine(sym.lineInfoObj),
         ]
   else:
-    reveal.newCall:
+    result = reveal.newCall:
       bindSym"&".nestList:
         # checkpoint kind: x
         newStmtList: [
@@ -365,7 +366,7 @@ proc revealSymbol(n: NimNode): NimNode =
           newLit" ",
           newLit repr(n),
           newLit": ",
-          newLit repr(typ),
+          newLit"(afraid to check type or value)"
         ]
 
 macro report*(ss: varargs[typed]) =
