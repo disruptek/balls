@@ -64,7 +64,7 @@ Here's a set of example tests which will pass (and fail) in interesting ways.
 ```nim
 import balls
 
-suite "a pretty suite shim":
+suite "suite balls":
 
   block goats:
     ## this is a test of goats
@@ -89,11 +89,11 @@ suite "a pretty suite shim":
     ## this block exists only to test inclusion of
     ## comments in the test code display...
     check r == 3
-    echo r
+    echo r, " will not be output"
 
   block:
     ## check a list of statements in a block
-    check:
+    check "r should be 4":
       r < 5
       r > 3
 
@@ -120,7 +120,7 @@ suite "a pretty suite shim":
   block:
     ## hide this gory when statement
     when defined(release):
-      balls:
+      suite "fixed stuff":
         const compile = true
         proc doesnt(c: bool) =
           if not c:
@@ -129,7 +129,7 @@ suite "a pretty suite shim":
         block:
           proc fixed() = doesnt(compile)
     else:
-      balls:
+      suite "broken stuff":
         block:
           proc broken() = doesnt(compile)
 
