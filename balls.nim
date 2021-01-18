@@ -908,14 +908,23 @@ when isMainModule:
     ## compute --hint(s) as appropriate
     var omit = @["Cc", "Link", "Conf", "Processing", "Exec",
                  "XDeclaredButNotUsed"]
-    # ignore performance warnings outside of local danger builds
     if ci or p.opt notin {danger}:
+      # ignore performance warnings outside of local danger builds
       omit.add "Performance"
     for hint in omit.items:
       result.add " --hint[$#]=off" % [ hint ]
-    when (NimMajor, NimMinor) >= (1, 4):
-      for warn in ["UnreachableCode"]:
-        result.add " --warning[$#]=off" % [ warn ]
+
+    ## compute --warning(s) as appropriate
+    omit = @[]
+    if ci:
+      # remove spam from ci logs
+      omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
+      when (NimMajor, NimMinor) >= (1, 2):
+        omit.add "ObservableStores"
+      when (NimMajor, NimMinor) >= (1, 4):
+        omit.add "UnreachableCode"
+    for warning in omit.items:
+      result.add " --warning[$#]=off" % [ warning ]
 
   let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
   var matrix: Matrix
