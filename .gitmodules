@@ -1,7 +1,0 @@
-[submodule "grok"]
-	path = grok
-  url = https://github.com/disruptek/grok
-	branch = master
-[submodule "ups"]
-	path = ups
-	url = https://github.com/disruptek/ups
