@@ -888,9 +888,14 @@ when isMainModule:
     #h = h !& hash(p.options)
     result = !$h
 
+  proc short(fn: string): string =
+    extractFilename changeFileExt(fn, "")
+
+  proc shortPath(fn: string): string =
+    fn.parentDir.lastPathPart / fn.short
+
   proc `$`(p: Profile): string =
-    let fn = extractFilename changeFileExt(p.fn, "")
-    "$#: $# $# $#" % [ fn, $p.cp, $p.gc, $p.opt ]
+    "$#: $# $# $#" % [ short p.fn, $p.cp, $p.gc, $p.opt ]
 
   template cmper(f: untyped) {.dirty.} =
     result = system.cmp(a.`f`, b.`f`)
@@ -914,6 +919,8 @@ when isMainModule:
     # setup the headers
     var headers: seq[Cell]
     headers.add newCell "nim-" & NimVersion
+    headers.add newCell "cp"
+    headers.add newCell "opt"
     for mm in MemModel:
       headers.add:
         newCell:
@@ -926,19 +933,18 @@ when isMainModule:
     proc bland(status: StatusKind): string =
       case status
       of Pass:
-        "ok"
+        "✓"
       of Skip:
-        "??"
+        " "
       else:
-        "!!"
+        "𐄂"
 
     # while the matrix has members,
     while matrix.len > 0:
       # get the next profile
       for p in matrix.keys:
         # compose a row name
-        var row: seq[string]
-        row.add "$#: $# $#" % [ $p.fn, $p.cp, $p.opt ]
+        var row = @[p.fn.shortPath, $p.cp, $p.opt]
         # then iterate over the memory models
         for mm in MemModel:
           var profile = p
@@ -1030,8 +1036,8 @@ when isMainModule:
       result = 1
 
   proc checkpoint(matrix: Matrix) =
-    #checkpoint "\ncurrent matrix:"
     when false:
+      checkpoint "\ncurrent matrix:"
       for profile, result in matrix.pairs:
         if result != Skip:
           checkpoint result, profile
