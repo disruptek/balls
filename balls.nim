@@ -950,9 +950,10 @@ when isMainModule:
           var profile = p
           profile.gc = mm
           # pull the run out of the matrix if possible
-          var status: StatusKind
-          if matrix.pop(profile, status):
-            row.add $bland(status)
+          # (stupid style for nim-1.0 reasons)
+          if profile in matrix:
+            row.add matrix[profile].bland
+            matrix.del profile
           else:
             row.add ""
         tab.addRow row
