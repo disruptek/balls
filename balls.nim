@@ -128,7 +128,7 @@ proc rewrite(n: NimNode; r: Rewrite): NimNode =
     if not second.isNil:
       result = second
 
-proc filter*(n: NimNode; f: Rewrite): NimNode =
+proc filter(n: NimNode; f: Rewrite): NimNode =
   ## perform a recursive rewrite (only once) using the given mutator
   result = f(n)
   if result.isNil:
