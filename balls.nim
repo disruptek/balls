@@ -930,8 +930,9 @@ when isMainModule:
   var matrix: Matrix
   # set some default matrix members (profiles)
   var opt = {
-    debug: @["--debuginfo", "--stackTrace:on"],
-    release: @["--define:release", "--stackTrace:on"],
+    debug: @["--debuginfo", "--stackTrace:on", "--excessiveStackTrace:on"],
+    release: @["--define:release", "--stackTrace:on",
+               "--excessiveStackTrace:on"],
     danger: @["--define:danger"],
   }.toTable
   var cp = @[c]
