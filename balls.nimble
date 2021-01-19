@@ -6,6 +6,7 @@ license = "MIT"
 # requires kute & co.
 requires "https://github.com/disruptek/grok >= 0.3.0 & < 1.0.0"
 requires "https://github.com/disruptek/ups < 1.0.0"
+requires "https://github.com/xmonader/nim-terminaltables#37981f5d403fb55688e00d24ab9b1d56e252f52b"
 
 bin = @["balls"]            # build the binary for basic test running
 installExt = @["nim"]       # we need to install balls.nim also

@@ -861,6 +861,7 @@ when false:
 
 when isMainModule:
   import std/[strutils, tables, os, osproc, hashes, algorithm]
+  import terminaltables
 
   const
     directory = "tests"
@@ -903,6 +904,54 @@ when isMainModule:
 
   proc `<`(a, b: Profile): bool {.used.} = cmp(a, b) == -1
   proc `==`(a, b: Profile): bool {.used.} = cmp(a, b) == 0
+
+  proc matrixTable(matrix: Matrix): string =
+    var matrix = matrix
+    # define the table
+    var tab = newUnicodeTable()
+    tab.separateRows = false
+
+    # setup the headers
+    var headers: seq[Cell]
+    headers.add newCell "nim-" & NimVersion
+    for mm in MemModel:
+      headers.add:
+        newCell:
+          if mm == markAndSweep:
+            "m&s"
+          else:
+            $mm
+    tab.setHeaders headers
+
+    proc bland(status: StatusKind): string =
+      case status
+      of Pass:
+        "ok"
+      of Skip:
+        "??"
+      else:
+        "!!"
+
+    # while the matrix has members,
+    while matrix.len > 0:
+      # get the next profile
+      for p in matrix.keys:
+        # compose a row name
+        var row: seq[string]
+        row.add "$#: $# $#" % [ $p.fn, $p.cp, $p.opt ]
+        # then iterate over the memory models
+        for mm in MemModel:
+          var profile = p
+          profile.gc = mm
+          # pull the run out of the matrix if possible
+          var status: StatusKind
+          if matrix.pop(profile, status):
+            row.add $bland(status)
+          else:
+            row.add ""
+        tab.addRow row
+        break
+    result = render tab
 
   proc hints(p: Profile; ci: bool): string =
     ## compute --hint(s) as appropriate
@@ -981,10 +1030,14 @@ when isMainModule:
       result = 1
 
   proc checkpoint(matrix: Matrix) =
-    checkpoint "\ncurrent matrix:"
-    for profile, result in matrix.pairs:
-      if result != Skip:
-        checkpoint result, profile
+    #checkpoint "\ncurrent matrix:"
+    when false:
+      for profile, result in matrix.pairs:
+        if result != Skip:
+          checkpoint result, profile
+    else:
+      checkpoint:
+        matrixTable matrix
 
   proc options(p: Profile): seq[string] =
     result = defaults & opt[p.opt]
