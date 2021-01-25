@@ -30,7 +30,9 @@ suite "suite balls":
   block:
     ## check a list of statements in a block
     check "r should be 4":
+      ## r less than
       r < 5
+      ## r greater than
       r > 3
 
   block:

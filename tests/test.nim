@@ -27,7 +27,9 @@ suite "a pretty suite shim":
   block:
     ## check a list of statements in a block
     check "something failed":
+      ## r less than
       r < 5
+      ## r greater than
       r > 3
 
   inc r

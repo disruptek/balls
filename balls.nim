@@ -430,11 +430,16 @@ macro check*(message: string; body: untyped) =
   ## Check one or more expressions in a block; raises an AssertionDefect
   ## in the event that an expression is `false` regardless of `assertions`
   ## settings.  Specify a custom `message` a la `assert`.
+  var comment = message
   body.expectKind nnkStmtList
   result = newStmtList()
   for child in body.items:
-    result.add:
-      newCall(bindSym"check", child, message)
+    case child.kind
+    of nnkCommentStmt:
+      comment = newCall(ident"&", message, newLit ": " & child.strVal)
+    else:
+      result.add:
+        newCall(bindSym"check", child, comment)
 
 proc success(t: var Test): NimNode =
   ## what to do when a test is successful
