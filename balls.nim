@@ -3,7 +3,8 @@ import std/times
 import std/os
 import std/sequtils
 import std/terminal
-import std/strutils
+import std/strutils except align, alignLeft
+from std/unicode import align, alignLeft
 import std/macros
 import std/colors
 
@@ -61,14 +62,15 @@ when ballsDry:
     emojiSource = " > "
   type
     StatusKind = enum      ## possible test results
-      None = "      "      ## (undefined)
-      Info = "info  "      ## may prefix information
-      Pass = "pass  "      ## total success
-      Skip = "skip  "      ## test was skipped
-      Part = "part  "      ## partial success
-      Fail = "fail  "      ## assertion failure
-      Died = "died  "      ## unexpected exception
-      Oops = "oops  "      ## compiles() failed
+      None = " "      ## (undefined)
+      Info = "i"      ## may prefix information
+      Pass = "🗸"      ## total success
+      Skip = "?"      ## test was skipped
+      Part = "/"      ## partial success
+      Fail = "𐄂"      ## assertion failure
+      Died = "✷"      ## unexpected exception
+      Oops = "؟"      ## compiles() failed
+
 else:
   const
     emojiStack  = " 🗇 "
@@ -165,6 +167,22 @@ const
   viaFileStyle    = Styling ansiStyleCode(styleItalic) &
                     Styling ansiStyleCode(styleUnderscore) &
                     Styling ansiForegroundColorCode(fgBlue, true)
+  headerStyle     = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiStyleCode(styleUnderscore) &
+                    Styling ansiForegroundColorCode(fgCyan, true)
+  leaderStyle     = Styling ansiStyleCode(styleItalic) &
+                    Styling ansiForegroundColorCode(fgCyan, true)
+  statusStyles: array[StatusKind, Styling] = [
+    None: resetStyle,
+    Info: commentStyle,
+    Pass: successStyle,
+    Skip: skippedStyle,
+    Part: resetStyle,
+    Fail: failureStyle,
+    Died: exceptionStyle,
+    Oops: oopsStyle
+  ]
+
 when defined(danger): # avoid unused warnings
   const
     testNumStyle  = Styling ansiStyleCode(styleItalic) &
@@ -836,37 +854,8 @@ macro test*(name: string; body: untyped) =
   ## A compatibility shim for adapting `std/unittest` syntax.
   newBlockStmt(genSym(nskLabel, name.strVal), body)
 
-# unused code that may move back into service
-when false:
-  proc massageLabel(n: NimNode): NimNode =
-    assert not n.isNil
-    case n.kind
-    of nnkStrLit:
-      result = genSym(nskLabel, $n.strVal)
-    of nnkIntLit:
-      result = genSym(nskLabel, $n.intVal)
-    else:
-      result = n
-
-  proc shortenRepr(n: NimNode): string =
-    let splat = repr(n).splitLines
-    if len(splat) == 1:
-      result = splat[0]
-    else:
-      result = splat[0] & " ⮠..."
-
-  proc countComments(n: NimNode): int =
-    assert not n.isNil
-    if n.kind == nnkStmtList:
-      for _ in items(n):
-        if _.kind == nnkCommentStmt:
-          result.inc len(_.strVal.splitLines())
-        else:
-          break
-
 when isMainModule:
-  import std/[strutils, tables, os, osproc, hashes, algorithm]
-  import terminaltables
+  import std/[tables, os, osproc, hashes, algorithm]
 
   const
     directory = "tests"
@@ -915,34 +904,69 @@ when isMainModule:
   proc `<`(a, b: Profile): bool {.used.} = cmp(a, b) == -1
   proc `==`(a, b: Profile): bool {.used.} = cmp(a, b) == 0
 
+  # reimplemented tables for simplicity
+  type
+    Tabouli = object
+      headers: seq[string]
+      rows: seq[seq[string]]
+      freeze: int              # column freeze, like in a spreadsheet
+
+  proc render(t: Tabouli): string =
+    ## render a table as a string, perhaps with style
+    const
+      pad = "  "
+    result = $headerStyle
+    var widths = newSeq[int](len t.headers)
+
+    # calculate the widths, and...
+    for i, s in t.headers.pairs:
+      widths[i] = len s
+      for row in t.rows.items:
+        if i < t.freeze:
+          widths[i] = max(widths[i], len row[i])
+        else:
+          break
+      # ...add the headers such that they begin/end at the corners
+      if i == 0:
+        result.add alignLeft(s, widths[i])  # top/left corner
+      else:
+        result.add align(s, widths[i])      # top/right corner
+      if i == widths.high:
+        result.add $resetStyle    # reset the style at the end
+      else:
+        result.add pad            # space the columns
+
+    # now we simply add the rows
+    for r, row in t.rows.pairs:
+      result.add "\n"
+      result.add $leaderStyle
+      for i, s in row.pairs:
+        if i < t.freeze:
+          # right-align the early columns
+          result.add align(s, widths[i])
+        else:
+          # NOTE: later columns are aligned, but we don't use align()
+          # 'cause it won't understand our embedded style controls
+          result.add spaces(widths[i] - 1)
+          result.add s
+        if i == 0:
+          result.add $resetStyle    # reset the style after the leader
+        if i == widths.high:
+          result.add $resetStyle    # reset the style at the end
+        else:
+          result.add pad            # space the columns
+
   proc matrixTable(matrix: Matrix): string =
     var matrix = matrix
-    # define the table
-    var tab = newUnicodeTable()
-    tab.separateRows = false
-
-    # setup the headers
-    var headers: seq[Cell]
-    headers.add newCell "nim-" & NimVersion
-    headers.add newCell "cp"
-    headers.add newCell "opt"
+    var tab = Tabouli()
+    tab.headers = @["nim-" & NimVersion, "cp", "opt"]
+    tab.freeze = len tab.headers
     for mm in MemModel:
-      headers.add:
-        newCell:
-          if mm == markAndSweep:
-            "m&s"
-          else:
-            $mm
-    tab.setHeaders headers
-
-    proc bland(status: StatusKind): string =
-      case status
-      of Pass:
-        "✓"
-      of Skip:
-        " "
-      else:
-        "𐄂"
+      tab.headers.add:
+        if mm == markAndSweep:
+          "m&s"
+        else:
+          $mm
 
     # while the matrix has members,
     while matrix.len > 0:
@@ -957,11 +981,16 @@ when isMainModule:
           # pull the run out of the matrix if possible
           # (stupid style for nim-1.0 reasons)
           if profile in matrix:
-            row.add matrix[profile].bland
+            let status = matrix[profile]
+            row.add:
+              if useColor():
+                $statusStyles[status] & "●"
+              else:
+                $status     # without color; this will be bland
             matrix.del profile
           else:
-            row.add ""
-        tab.addRow row
+            row.add " "
+        tab.rows.add row
         break
     result = render tab
 
@@ -1049,7 +1078,7 @@ when isMainModule:
           checkpoint result, profile
     else:
       checkpoint:
-        matrixTable matrix
+        "\n" & matrixTable(matrix) & "\n"
 
   proc options(p: Profile): seq[string] =
     result = defaults & opt[p.opt]
