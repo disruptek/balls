@@ -13,7 +13,10 @@ skipDirs = @["tests"]       # so stupid...  who doesn't want tests?
 #installFiles = @["balls.nim"] # https://github.com/nim-lang/Nim/issues/16661
 
 task test, "run tests for ci":
-  exec "nim c --run balls.nim"
+  when defined(windows):
+    exec "balls.cmd"
+  else:
+    exec "balls"
 
 task demo, "produce a demo":
   exec "nim c --define:release balls.nim"

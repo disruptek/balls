@@ -45,7 +45,9 @@ jobs:
         shell: bash
         run: |
           cd balls
-          nimble --accept develop
+          #nimble --accept develop
+          #nimble --accept build
+          nimble --accept install
           nimble test
 
       - name: Build docs
