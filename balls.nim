@@ -158,14 +158,21 @@ proc niceKind(n: NimNode): NimNode =
   result = newLit toLowerAscii(kind[3..^1])
 
 proc localPath(fn: string): string =
-  when nimvm:
-    when (NimMajor, NimMinor) == (1, 4):
-      fn
-    else:
-      relativePath(fn, getProjectPath())
-    #extractFilename fn
+  ## a somewhat verbose impl due to necessity
+  when defined(js):
+    try:
+      result = relativePath(fn, getCurrentDir())
+    except ValueError:
+      # "specified root is not absolute"; cwd probably unavailable
+      result = relativePath(fn, getProjectPath())
   else:
-    relativePath(fn, getCurrentDir())
+    when nimvm:
+      when (NimMajor, NimMinor) == (1, 4):
+        fn
+      else:
+        relativePath(fn, getProjectPath())
+    else:
+      relativePath(fn, getCurrentDir())
 
 proc renderFilename(s: LineInfo): string =
   "$1$3$2$1" % [ $resetStyle,

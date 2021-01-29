@@ -233,6 +233,10 @@ proc options(p: Profile): seq[string] =
   if (NimMajor, NimMinor) == (1, 2):
     result.add "--sinkInference:off"
 
+  # add --define:nodejs on js backend so that getCurrentDir() works
+  if p.cp == js:
+    result.add "--define:nodejs"
+
 proc perform*(p: var Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
   let pattern =
