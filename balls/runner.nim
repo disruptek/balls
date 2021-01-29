@@ -16,7 +16,7 @@ import balls/tabouli
 import balls
 
 const
-  ballsFailFast* {.booldefine.} = true ##
+  ballsFailFast* {.booldefine.} = false ##
   ## if true, quit early on a CI failure
 
 type
@@ -89,6 +89,11 @@ proc `==`*(a, b: Profile): bool {.used.} =
   ## Note that this comparison does not measure test filename.
   cmp(a, b) == 0
 
+proc contains*(matrix: Matrix; p: Profile): bool =
+  ## A test result of `None` or `Skip` effectively does not count as being
+  ## present in the test `matrix`.
+  matrix.getOrDefault(p, None) notin {Skip, None}
+
 proc matrixTable*(matrix: Matrix): string =
   ## Render the `matrix` as a table.
   var matrix = matrix
@@ -121,9 +126,9 @@ proc matrixTable*(matrix: Matrix): string =
               $statusStyles[status] & $status
             else:
               $status
-          matrix.del profile
         else:
           row.add " "
+        matrix.del profile
       tab.rows.add row
       break
 
@@ -169,10 +174,13 @@ var cp = @[c]
 var gc: set[MemModel]
 when (NimMajor, NimMinor) >= (1, 2):
   gc.incl arc
-  # panics:on is absent in 1.0
-  if not ci:
-    # and it's not something we're ready to break the world over
+  # danger is no longer required to pass, so this is a useful place to
+  # produce some extra warnings and test future defaults
+  when (NimMajor, NimMinor) >= (1, 5):
     opt[danger].add "--panics:on"
+    opt[danger].add "--experimental:strictFuncs"
+    opt[danger].add "--experimental:strictNotNil"
+    opt[danger].add "--exceptions:goto"
 else:
   gc.incl refc
 # options common to all profiles
@@ -213,14 +221,8 @@ proc attempt(cmd: string): int =
     result = 1
 
 proc checkpoint(matrix: Matrix) =
-  when false:
-    checkpoint "\ncurrent matrix:"
-    for profile, result in matrix.pairs:
-      if result != Skip:
-        checkpoint result, profile
-  else:
-    checkpoint:
-      "\n" & matrixTable(matrix) & "\n"
+  checkpoint:
+    "\n" & matrixTable(matrix) & "\n"
 
 proc options(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
@@ -262,8 +264,10 @@ proc perform*(p: var Profile): StatusKind =
 
   # certain profiles don't even get attempted
   if p.gc == vm and p.cp != js:
+    checkpoint "(skipping NimScript test on $#)" % [ $p.gc ]
     result = Skip
   elif p.cp == js and p.gc != vm:
+    checkpoint "(skipping $# test on $#)" % [ $p.gc, $p.cp ]
     result = Skip
   else:
     # run it and return the result
@@ -273,11 +277,6 @@ proc perform*(p: var Profile): StatusKind =
       result = Pass
     else:
       result = Fail
-
-proc contains*(matrix: Matrix; p: Profile): bool =
-  ## A test result of `None` or `Skip` effectively does not count as being
-  ## present in the test `matrix`.
-  matrix.getOrDefault(p, None) notin {Skip, None}
 
 proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
   ## emit the matrix report whenever it changes
@@ -310,15 +309,19 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
       discard execCmd "nim --version"
       # don't quit when run locally; just keep chugging away
       if ci and ballsFailFast:
-        if p.cp notin {cpp, js} and p.gc notin {arc, orc}:
-          # before we fail the ci, run a debug test for shits and grins
-          var n = p
-          n.opt = debug
-          if n notin matrix:      # a safer solution
-            discard perform n
-            matrix[n] = Info
-          quit 1
-      break
+        # neither cpp or js backends are expected to work 100% of the time
+        if p.cp notin {cpp, js}:
+          # arc and orc are still too unreliable to demand successful runs
+          if p.gc notin {arc, orc}:
+            # danger builds can fail; they include experimental features
+            if p.opt notin {danger, debug}:
+              # before we fail the ci, run a debug test for shits and grins
+              var n = p
+              n.opt = debug
+              if n notin matrix:      # a safer solution
+                discard perform n
+                matrix[n] = Info
+              quit 1
 
 proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
