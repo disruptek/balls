@@ -4,18 +4,38 @@ import std/os
 
 import grok/mem  # for quiesceMemory()
 
+when defined(js):
+  # import the process.exitCode from javascript
+  var exitCode {.importjs: "process.$1".}: cint
+  # we may as well also import the process.exit()
+  proc processExit(code: cint = 0) {.importjs: "process.$1(#)".}
+  proc setProgramResult(q: int) =
+    # set the process.exitCode
+    exitCode = cint q
+  # this will be available only in javascript
+  export processExit
+else:
+  when (NimMajor, NimMinor) >= (1, 3):
+    # this is our ideal
+    import std/exitprocs
+  else:
+    # else, we must forge some stuff from exitprocs
+    proc setProgramResult(q: int) =
+      programResult = q
+    proc addExitProc(p: proc() {.noconv.}) = addQuitProc p
+  # this will be available only inside the c/cpp backends
+  export addExitProc
+# make sure we definitely have this symbol on all backends
+export setProgramResult
+
+# working around the Error->Defect change-over
 when (NimMajor, NimMinor) >= (1, 3):
-  import std/exitprocs
   const hasDefects* = true
-  export setProgramResult, addExitProc
 else:
   # this is the best solution to --useVersion:1.0 i guess...
   const hasDefects* = compiles(AssertionDefect)
   when not hasDefects:
     type AssertionDefect* = AssertionError
-  proc setProgramResult*(q: int) =
-    programResult = q
-  proc addExitProc*(p: proc() {.noconv.}) = addQuitProc p
 
 const
   ballsDry* {.booldefine.} = false
