@@ -159,20 +159,20 @@ proc niceKind(n: NimNode): NimNode =
 
 proc localPath(fn: string): string =
   ## a somewhat verbose impl due to necessity
-  when defined(js):
-    try:
-      result = relativePath(fn, getCurrentDir())
-    except ValueError:
-      # "specified root is not absolute"; cwd probably unavailable
+  when nimvm:
+    when (NimMajor, NimMinor) == (1, 4):
+      result = fn
+    else:
       result = relativePath(fn, getProjectPath())
   else:
-    when nimvm:
-      when (NimMajor, NimMinor) == (1, 4):
-        fn
-      else:
-        relativePath(fn, getProjectPath())
+    when defined(js):
+      try:
+        result = relativePath(fn, getCurrentDir())
+      except ValueError:
+        # "specified root is not absolute"; cwd probably unavailable
+        result = relativePath(fn, getProjectPath())
     else:
-      relativePath(fn, getCurrentDir())
+      result = relativePath(fn, getCurrentDir())
 
 proc renderFilename(s: LineInfo): string =
   "$1$3$2$1" % [ $resetStyle,
