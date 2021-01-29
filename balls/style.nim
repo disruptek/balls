@@ -1,6 +1,8 @@
 import std/macros
 import std/colors
 
+import grok
+
 import balls/spec
 
 type
@@ -93,10 +95,14 @@ proc `$`*(style: Styling): string =
 proc `&`*(style: Styling; n: NimNode): NimNode =
   ## combine style and something $able, but only output the
   ## style if you find that the program is on a tty at runtime
-  let useColor = bindSym"useColor"
   let n = dollar n
-  let text = newStmtList(newLit($style), n, newLit($resetStyle))
-  result = nnkIfStmt.newNimNode(n)
-  result.add nnkElifBranch.newTree(newCall(useColor),
-                                   nestList(ident"&", text))
-  result.add nnkElse.newTree(n)
+  result = nnkIfStmt.newTreeFrom n:
+    nnkElifBranch.newTreeFrom n:
+      bindSym"useColor".newCall
+      nestList ident"&":
+        nnkStmtList.newTreeFrom n:
+          newLit $style
+          n
+          newLit $resetStyle
+    nnkElse.newTree:
+      n

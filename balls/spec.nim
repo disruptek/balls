@@ -2,6 +2,7 @@ import std/times
 import std/macros
 import std/os
 
+import grok
 import grok/mem  # for quiesceMemory()
 
 when defined(js):
@@ -59,7 +60,7 @@ when ballsDry:
       None = " "      ## (undefined)
       Info = "⊚"      ## may prefix information
       Pass = "●"      ## total success
-      Skip = "↣"      ## test was skipped
+      Skip = "⸮"      ## test was skipped
       Part = "◐"      ## partial success
       Fail = "○"      ## assertion failure
       Died = "✷"      ## unexpected exception
@@ -129,10 +130,12 @@ proc dollar*(n: NimNode): NimNode =
   ## If it's not a string literal, dollar it.
   if n.kind == nnkStrLit:
     result = n
-  elif n.kind == nnkCall and $n[0] in ["$", "&"]:
+  elif n.kind == nnkCall and n[0].strVal in ["$", "&"]:
     result = n
   else:
-    result = newCall(bindSym"$", n)
+    result = nnkCall.newTreeFrom n:
+      bindSym"$"
+      n
 
 proc flushStderr*() {.noconv, used.} =
   ## Convenience for flushing stderr during process exit.

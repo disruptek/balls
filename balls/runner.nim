@@ -118,15 +118,19 @@ proc matrixTable*(matrix: Matrix): string =
           let status = matrix[profile]
           row.add:
             if useColor():
-              $statusStyles[status] & "●"
+              $statusStyles[status] & $status
             else:
-              $status     # without color; this will be bland
+              $status
           matrix.del profile
         else:
           row.add " "
       tab.rows.add row
       break
-  result = render tab
+
+  # pass the length of StatusKind.None; this corresponds to the width
+  # of the other StatusKind values, in characters, which is 1 for bland
+  # values and 2 for wide emojis
+  result = render(tab, size = len $None)
 
 proc hints*(p: Profile; ci: bool): string =
   ## Compute `--hint` and `--warning` flags as appropriate given Profile

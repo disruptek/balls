@@ -8,8 +8,10 @@ type
     rows*: seq[seq[string]]
     freeze*: int              # column freeze, like in a spreadsheet
 
-proc render*(t: Tabouli): string =
-  ## render a table as a string, perhaps with style
+proc render*(t: Tabouli; size = 1): string =
+  ## render a table as a string, perhaps with style; the size argument
+  ## defines the the anticipated width of unfrozen columns without regard
+  ## to styling.  this allows us to handle 2-char wide emojis properly.
   const
     pad = "  "
   result = $headerStyle
@@ -44,7 +46,7 @@ proc render*(t: Tabouli): string =
       else:
         # NOTE: later columns are aligned, but we don't use align()
         # 'cause it won't understand our embedded style controls
-        result.add spaces(widths[i] - 1)
+        result.add spaces(widths[i] - min(size, s.len))
         result.add s
       if i == 0:
         result.add $resetStyle    # reset the style after the leader
