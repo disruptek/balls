@@ -118,7 +118,10 @@ proc numberLines(s: string; first = 1): NimNode =
 
 proc checkpoint*(ss: varargs[string, `$`]) =
   ## Like `echo`, but outputs to `stderr` with the other test output.
-  writeLine(stderr, ss.join " ")
+  when defined(js):
+    echo ss.join(" ")
+  else:
+    writeLine(stderr, ss.join(" "))
 
 proc output(n: NimNode): NimNode =
   assert not n.isNil
@@ -307,12 +310,15 @@ proc success(t: var Test): NimNode =
 
 proc fromFileGetLine(file: string; line: int): string =
   ## TODO: optimize this expensive fetch
-  if file.fileExists:
-    let lines = toSeq lines(file)
-    result = lines[line - 1]
+  when defined(js):
+    result = "(unsupported on js)"
   else:
-    #result = "(not found: $#)" % [ file ]
-    result = "(file not found)"
+    if file.fileExists:
+      let lines = toSeq lines(file)
+      result = lines[line - 1]
+    else:
+      #result = "(not found: $#)" % [ file ]
+      result = "(file not found)"
 
 proc findWhere(s: string; p: string; into: var string): bool {.used.} =
   ## find the location of a substring and, if found, produce empty prefix
@@ -336,12 +342,15 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
   ## output the stack trace of a test, and perhaps that of any exception
-  var renderStack = bindSym"renderStack"
-  var getStack = newCall(ident"getStackTraceEntries")
-  if not n.isNil:
-    getStack.add n  # get the exception's stacktrace
-  result = newIfStmt((newCall(ident"stackTraceAvailable"),
-                      newCall(renderStack, newLit($t.status), getStack)))
+  when defined(js):
+    result = newEmptyNode()
+  else:
+    var renderStack = bindSym"renderStack"
+    var getStack = newCall(bindSym"getStackTraceEntries")
+    if not n.isNil:
+      getStack.add n  # get the exception's stacktrace
+    result = newIfStmt((newCall(bindSym"stackTraceAvailable"),
+                        newCall(renderStack, newLit($t.status), getStack)))
 
 proc renderSource(t: Test): NimNode =
   ## strip the first comment, include the remainder
@@ -690,9 +699,10 @@ macro suite*(name: string; tests: untyped) =
         nnkDiscardStmt.newTree:
           bindSym"execShellCmd".newCall newLit""
 
-    # ensure that we flush stderr on exit
-    add result:
-      bindSym"addExitProc".newCall bindSym"flushStderr"
+    when not defined(js):
+      # ensure that we flush stderr on exit
+      add result:
+        bindSym"addExitProc".newCall bindSym"flushStderr"
 
     for index, n in tests.pairs:
       var test: Test

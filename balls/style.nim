@@ -1,5 +1,4 @@
 import std/macros
-import std/terminal
 import std/colors
 
 import balls/spec
@@ -13,14 +12,25 @@ proc `&`*(a: string; b: Styling): Styling = b & a
 
 {.push hint[ConvFromXtoItselfNotNeeded]: off.}
 
+when defined(js):
+  template ansiStyleCode(x: untyped): string = ""
+  template ansiForegroundColorCode(x: untyped; bool = true): string = ""
+  template ansiBackgroundColorCode(x: untyped; bool = true): string = ""
+  const
+    ansiResetCode = ""
+else:
+  import std/terminal
+
 const
   resetStyle*      = Styling ansiResetCode
   resultsStyle*    = Styling ansiStyleCode(styleItalic) &
                      Styling ansiForegroundColorCode(fgWhite, true)
+  informStyle*     = Styling ansiForegroundColorCode(fgBlue, true)
   commentStyle*    = Styling ansiStyleCode(styleItalic) &
                      Styling ansiForegroundColorCode(fgWhite, true)
   lineNumStyle*    = Styling ansiStyleCode(styleItalic) &
                      Styling ansiForegroundColorCode(fgBlack, true)
+  partialStyle*    = Styling ansiForegroundColorCode(fgYellow, true)
   successStyle*    = Styling ansiForegroundColorCode(fgGreen)
   oopsStyle*       = Styling ansiStyleCode(styleBright) &
                      Styling ansiStyleCode(styleReverse) &
@@ -43,10 +53,10 @@ const
                      Styling ansiForegroundColorCode(fgCyan, true)
   statusStyles*: array[StatusKind, Styling] = [
     None: resetStyle,
-    Info: commentStyle,
+    Info: informStyle,
     Pass: successStyle,
-    Skip: skippedStyle,
-    Part: resetStyle,
+    Skip: commentStyle,
+    Part: partialStyle,
     Fail: failureStyle,
     Died: exceptionStyle,
     Oops: oopsStyle
@@ -69,7 +79,10 @@ proc useColor*(): bool =
       true
     else:
       # at runtime, try to emit style if possible
-      onCI or stderr.isAtty
+      when defined(js):
+        onCI
+      else:
+        onCI or stderr.isAtty
 
 proc `$`*(style: Styling): string =
   if useColor():

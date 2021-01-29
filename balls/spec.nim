@@ -37,13 +37,13 @@ when ballsDry:
   type
     StatusKind* = enum      ## possible test results
       None = " "      ## (undefined)
-      Info = "i"      ## may prefix information
-      Pass = "🗸"      ## total success
-      Skip = "?"      ## test was skipped
-      Part = "/"      ## partial success
-      Fail = "𐄂"      ## assertion failure
+      Info = "⊚"      ## may prefix information
+      Pass = "●"      ## total success
+      Skip = "↣"      ## test was skipped
+      Part = "◐"      ## partial success
+      Fail = "○"      ## assertion failure
       Died = "✷"      ## unexpected exception
-      Oops = "؟"      ## compiles() failed
+      Oops = "⊖"      ## compiles() failed
 
 else:
   const
@@ -116,4 +116,5 @@ proc dollar*(n: NimNode): NimNode =
 
 proc flushStderr*() {.noconv, used.} =
   ## Convenience for flushing stderr during process exit.
-  flushFile stderr
+  when not defined(js):
+    flushFile stderr

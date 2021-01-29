@@ -23,17 +23,23 @@ type
   Compiler* = enum  ## backends that we test
     c
     cpp
+    js
+
   Optimizer* = enum ## optimization modes that we test
     debug
     release
     danger
+
   MemModel* = enum  ## memory managers that we test
     refc
     markAndSweep
     arc
     orc
+    vm
+
   Matrix* = OrderedTable[Profile, StatusKind] ##
   ## the Matrix collects test results in the order they are obtained
+
   Profile* = object ##
   ## the Profile defines compilation settings for a single test invocation
     cp*: Compiler
@@ -181,11 +187,14 @@ elif ci:
 # remote ci expands the matrix
 if ci:
   cp.add cpp                  # add cpp
+  cp.add js                   # add js
   gc.incl refc                # add refc
   gc.incl markAndSweep        # add markAndSweep
   if arc in gc:               # add orc if arc is available
     if (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
       gc.incl orc
+  if js in cp:
+    gc.incl vm
 else:
   # do a danger build locally so we can check time/space; omit release
   opt.del release
@@ -226,7 +235,11 @@ proc options(p: Profile): seq[string] =
 
 proc perform*(p: var Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
-  const pattern = "nim $1 --gc:$2 $3"
+  let pattern =
+    if p.gc == vm:
+      "nim $1 $3"
+    else:
+      "nim $1 --gc:$2 $3"
   # we also use it to determine which hints to include
   let hs = hints(p, ci)
 
@@ -239,12 +252,19 @@ proc perform*(p: var Profile): StatusKind =
   # add the hints into the invocation ahead of the filename
   run.add hs & " " & p.fn
 
-  # run it and return the result
-  let code = attempt run
-  if code == 0:
-    result = Pass
+  # certain profiles don't even get attempted
+  if p.gc == vm and p.cp != js:
+    result = Skip
+  elif p.cp == js and p.gc != vm:
+    result = Skip
   else:
-    result = Fail
+    # run it and return the result
+    let code = attempt run
+    case code
+    of 0:
+      result = Pass
+    else:
+      result = Fail
 
 proc contains*(matrix: Matrix; p: Profile): bool =
   ## A test result of `None` or `Skip` effectively does not count as being
@@ -282,7 +302,7 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
       discard execCmd "nim --version"
       # don't quit when run locally; just keep chugging away
       if ci and ballsFailFast:
-        if p.cp != cpp and p.gc notin {arc, orc}:
+        if p.cp notin {cpp, js} and p.gc notin {arc, orc}:
           # before we fail the ci, run a debug test for shits and grins
           var n = p
           n.opt = debug
