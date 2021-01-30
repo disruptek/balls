@@ -194,7 +194,7 @@ if (NimMajor, NimMinor) >= (1, 6):
 elif ci:
   # otherwise, force rebuild only on CI
   defaults.add "--forceBuild:on"
-  if (NimMajor, NimMinor) >= (1, 5):
+  when (NimMajor, NimMinor) >= (1, 5):
     # force incremental off so as not to get confused by a config file
     defaults.add "--incremental:off"
 
@@ -205,7 +205,7 @@ if ci:
   gc.incl refc                # add refc
   gc.incl markAndSweep        # add markAndSweep
   if arc in gc:               # add orc if arc is available
-    if (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
+    when (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
       gc.incl orc
   if js in cp:
     gc.incl vm
@@ -233,17 +233,21 @@ proc options(p: Profile): seq[string] =
   for index in 1 .. paramCount():
     result.add paramStr(index)
 
+  # turn off panics on 1.4 because writeStackTrace breaks js builds
+  if p.cp == js:
+    when (NimMajor, NimMinor) == (1, 4):
+      keepItIf(result, it != "--panics:on")
+
+    # add --define:nodejs on js backend so that getCurrentDir() works
+    result.add "--define:nodejs"
+
   # don't run compile-only tests
   if "--compileOnly" notin result:
     result.add "--run"
 
   # turn off sinkInference on 1.2 builds because it breaks VM code
-  if (NimMajor, NimMinor) == (1, 2):
+  when (NimMajor, NimMinor) == (1, 2):
     result.add "--sinkInference:off"
-
-  # add --define:nodejs on js backend so that getCurrentDir() works
-  if p.cp == js:
-    result.add "--define:nodejs"
 
 proc perform*(p: var Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
@@ -295,8 +299,9 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
       quit 1
     matrix[p] = perform p
 
+    const MajorMinor = $NimMajor & "." & $NimMinor
     if matrix[p] > Part:
-      case $NimMajor & "." & $NimMinor
+      case MajorMinor
       of "1.4":
         if p.gc > orc:
           continue
