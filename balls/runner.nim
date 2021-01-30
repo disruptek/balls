@@ -178,9 +178,11 @@ when (NimMajor, NimMinor) >= (1, 2):
   # produce some extra warnings and test future defaults
   when (NimMajor, NimMinor) >= (1, 5):
     opt[danger].add "--panics:on"
-    opt[danger].add "--experimental:strictFuncs"
-    opt[danger].add "--experimental:strictNotNil"
     opt[danger].add "--exceptions:goto"
+    opt[danger].add "--experimental:strictFuncs"
+    if ci:
+      # notnil is too slow to run locally
+      opt[danger].add "--experimental:strictNotNil"
 else:
   gc.incl refc
 # options common to all profiles
