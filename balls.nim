@@ -56,21 +56,56 @@ proc filter(n: NimNode; f: Rewrite): NimNode =
 
 proc combineLiterals(n: NimNode): NimNode =
   ## merges "foo" & "bar" into "foobar"
-  proc combiner(n: NimNode): NimNode =
+  proc collapser(n: NimNode): NimNode =
     case n.kind
-    of nnkCall:
-      case $n[0]
-      of "$":
-        if n[1].kind == nnkStrLit:
-          result = n[1]
-      of "&":
-        if len(n) == 3 and {n[1].kind, n[2].kind} == {nnkStrLit}:
-          result = newLit(n[1].strVal & n[2].strVal)
-      else:
-        discard
+    of nnkIfStmt:
+      if n.len == 2:
+        # cheating here
+        if {n[0].kind, n[1].kind} == {nnkElifBranch, nnkElse}:
+          if n[0].len == 2:
+            if {n[0][0].len, n[1].len} == {1}:
+              if n[0][0].kind == nnkCall:
+                if n[0][0][0].kind == nnkSym:
+                  if n[0][0][0].strVal == "useColor":
+                    if n[0][1] == n[1][0]:
+                      result = n[1][0]
     else:
       discard
-  result = rewrite(n, combiner)
+
+  proc concatenator(n: NimNode): NimNode =
+    if n.kind in {nnkInfix, nnkCall}:
+      if n.len == 3:
+        if n[0].kind in {nnkSym, nnkIdent}:
+          if n[0].strVal == "&":
+            if n[1].kind == nnkStrLit and n[1].strVal == "":
+              result = n[2]
+            elif n[2].kind == nnkStrLit and n[2].strVal == "":
+              result = n[1]
+            elif {n[1].kind, n[2].kind} == {nnkStrLit}:
+              result = newLit(n[1].strVal & n[2].strVal)
+
+  proc combiner(n: NimNode): NimNode =
+    if n.kind == nnkCall:
+      if n.len > 0:
+        if n[0].kind in {nnkIdent, nnkSym}:
+          case n[0].strVal
+          of "$":
+            if n[1].kind == nnkStrLit:
+              result = n[1]
+          of "&":
+            if n.len == 3 and {n[1].kind, n[2].kind} == {nnkStrLit}:
+              result = newLit(n[1].strVal & n[2].strVal)
+          else:
+            discard
+
+  result = n
+  while true:
+    let preprocess = result
+    result = rewrite(result, collapser)
+    result = rewrite(result, combiner)
+    result = rewrite(result, concatenator)
+    if preprocess == result:
+      break
 
 proc comment(n: NimNode): NimNode =
   ## render a comment with the given stringish node
@@ -457,8 +492,8 @@ template expect*(exception: typed; body: untyped) =
       except CatchableError as e:
         checkpoint "$#: $#" % [ $e.name, e.msg ]
         fail "expected $# but caught $#" % [ $exception, $e.name ]
-      raise newException(ExpectedError,
-        "expected $# exception" % [ $exception ])
+      raise newException ExpectedError:
+        "expected $# exception" % [ $exception ]
 
 proc reportResults(): NimNode =
   ## produce a small legend showing result totals
@@ -701,9 +736,8 @@ macro suite*(name: string; tests: untyped) =
   ## test names using `##` comment statements, or block syntax like that
   ## of `unittests`: `test "my test name": check true`
 
+  result = newStmtList()
   try:
-    result = newStmtList()
-
     # windows cmd / powershell color support
     when defined(windows):
       add result:
