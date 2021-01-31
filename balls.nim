@@ -99,13 +99,15 @@ proc combineLiterals(n: NimNode): NimNode =
             discard
 
   result = n
-  while true:
-    let preprocess = result
-    result = rewrite(result, collapser)
-    result = rewrite(result, combiner)
-    result = rewrite(result, concatenator)
-    if preprocess == result:
-      break
+  # don't rewrite release code; it's too risky/slow
+  when not defined(release):
+    while true:
+      let preprocess = result
+      result = rewrite(result, collapser)
+      result = rewrite(result, combiner)
+      result = rewrite(result, concatenator)
+      if preprocess == result:
+        break
 
 proc comment(n: NimNode): NimNode =
   ## render a comment with the given stringish node
