@@ -71,6 +71,12 @@ when defined(danger): # avoid unused warnings
 
 {.pop.}
 
+let colorThisRun: bool =
+  when defined(js):
+    onCI
+  else:
+    onCI or stderr.isAtty
+
 proc useColor*(): bool =
   ## for the bland folks; they live among us!
   when ballsDry:
@@ -81,10 +87,7 @@ proc useColor*(): bool =
       true
     else:
       # at runtime, try to emit style if possible
-      when defined(js):
-        onCI
-      else:
-        onCI or stderr.isAtty
+      colorThisRun
 
 proc `$`*(style: Styling): string =
   if useColor():
@@ -95,14 +98,17 @@ proc `$`*(style: Styling): string =
 proc `&`*(style: Styling; n: NimNode): NimNode =
   ## combine style and something $able, but only output the
   ## style if you find that the program is on a tty at runtime
-  let n = dollar n
-  result = nnkIfStmt.newTreeFrom n:
-    nnkElifBranch.newTreeFrom n:
-      bindSym"useColor".newCall
-      nestList ident"&":
-        nnkStmtList.newTreeFrom n:
-          newLit $style
-          n
-          newLit $resetStyle
-    nnkElse.newTree:
-      n
+  let n = dollar n  # this dollar is sometimes gratuitous...
+  if style.string == "":
+    result = n
+  else:
+    result = nnkIfStmt.newTreeFrom n:
+      nnkElifBranch.newTreeFrom n:
+        bindSym"useColor".newCall
+        nestList ident"&":
+          nnkStmtList.newTreeFrom n:
+            newLit $style
+            n
+            newLit $resetStyle
+      nnkElse.newTree:
+        n
