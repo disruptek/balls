@@ -457,13 +457,14 @@ proc skipped(t: var Test; n: NimNode): NimNode =
   ## what to do when a test is skipped
   assert not n.isNil
   t.status = Skip
-  result = newStmtList()
-  result.add t.incResults
-  var text = newStmtList()
-  text.add(skippedStyle & t.name.newLit)
-  text.add(": ".newLit)
-  text.add(n.dotMsg)
-  result.add t.output(nestList(ident"&", text))
+  result = nnkStmtList.newTreeFrom n:
+    t.incResults
+    t.output:
+      nestList bindSym"&":
+        nnkStmtList.newTreeFrom n:
+          skippedStyle & t.name.newLit
+          newLit": "
+          n.dotMsg
 
 proc exception(t: var Test; n: NimNode): NimNode =
   ## what to do when a test raises an exception
@@ -534,7 +535,7 @@ proc composeColon(name: NimNode;
     result = newEmptyNode()
 
 proc ctor(test: Test): NimNode =
-  ## copy compile-time Test into, uh, compile-time Test constructor
+  ## copy compile-time Test into runtime Test constructor
   let typ = bindSym"Test"
   result = nnkObjConstr.newTree(typ)
   for name, value in fieldPairs(test):
