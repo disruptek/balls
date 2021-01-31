@@ -129,13 +129,15 @@ proc init*(test: var Test; name: string; code: NimNode) =
 proc dollar*(n: NimNode): NimNode =
   ## If it's not a string literal, dollar it.
   if n.kind == nnkStrLit:
-    result = n
-  elif n.kind == nnkCall and n[0].strVal in ["$", "&"]:
-    result = n
-  else:
-    result = nnkCall.newTreeFrom n:
-      bindSym"$"
-      n
+    return n
+  if n.kind == nnkCall:
+    if n.len > 0:
+      if n[0].kind in {nnkIdent, nnkSym}:
+        if n[0].strVal in ["$", "&"]:
+          return n
+  result = nnkCall.newTreeFrom n:
+    bindSym"$"
+    n
 
 proc flushStderr*() {.noconv, used.} =
   ## Convenience for flushing stderr during process exit.
