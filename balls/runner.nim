@@ -16,8 +16,8 @@ import balls/tabouli
 import balls
 
 const
-  ballsFailFast* {.booldefine.} = false ##
-  ## if true, quit early on a CI failure
+  ballsFailFast* {.booldefine.} = true ##
+  ## if true, quit early on a test failure
 
 type
   Compiler* = enum  ## backends that we test

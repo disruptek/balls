@@ -5,29 +5,34 @@ import std/os
 import grok
 import grok/mem  # for quiesceMemory()
 
+# critically, if we ever indicated a failure,
+# don't obscure that failure with a subsequent success
+
 when defined(js):
   # import the process.exitCode from javascript
   var exitCode {.importjs: "process.$1".}: cint
   # we may as well also import the process.exit()
   proc processExit(code: cint = 0) {.importjs: "process.$1(#)".}
-  proc setProgramResult(q: int) =
+  proc setBallsResult(q: int) =
     # set the process.exitCode
-    exitCode = cint q
+    exitCode = max(exitCode, cint q)
   # this will be available only in javascript
   export processExit
 else:
   when (NimMajor, NimMinor) >= (1, 3):
     # this is our ideal
     import std/exitprocs
+    proc setBallsResult(q: int) =
+      setProgramResult:
+        max(getProgramResult(), q)
   else:
-    # else, we must forge some stuff from exitprocs
-    proc setProgramResult(q: int) =
-      programResult = q
+    proc setBallsResult(q: int) =
+      programResult = max(programResult, q)
     proc addExitProc(p: proc() {.noconv.}) = addQuitProc p
   # this will be available only inside the c/cpp backends
   export addExitProc
 # make sure we definitely have this symbol on all backends
-export setProgramResult
+export setBallsResult
 
 # working around the Error->Defect change-over
 when (NimMajor, NimMinor) >= (1, 3):
