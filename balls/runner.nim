@@ -310,6 +310,7 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
           continue
       else:
         discard
+      setBallsResult ord(matrix[p])
       checkpoint p.ran
       checkpoint "failed; compiler:"
       flushStderr()   # hope we beat the compiler's --version
