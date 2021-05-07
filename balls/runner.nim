@@ -310,7 +310,6 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
           continue
       else:
         discard
-      setBallsResult ord(matrix[p])
       checkpoint p.ran
       checkpoint "failed; compiler:"
       flushStderr()   # hope we beat the compiler's --version
@@ -323,6 +322,7 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
           if p.gc notin {arc, orc}:
             # danger builds can fail; they include experimental features
             if p.opt notin {danger, debug}:
+              setBallsResult int(matrix[p] > Part)
               # before we fail the ci, run a debug test for shits and grins
               var n = p
               n.opt = debug
