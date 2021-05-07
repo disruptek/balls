@@ -16,8 +16,8 @@ import balls/tabouli
 import balls
 
 const
-  ballsFailFast* {.booldefine.} = false ##
-  ## if true, quit early on a CI failure
+  ballsFailFast* {.booldefine.} = true ##
+  ## if true, quit early on a test failure
 
 type
   Compiler* = enum  ## backends that we test
@@ -322,6 +322,7 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
           if p.gc notin {arc, orc}:
             # danger builds can fail; they include experimental features
             if p.opt notin {danger, debug}:
+              setBallsResult int(matrix[p] > Part)
               # before we fail the ci, run a debug test for shits and grins
               var n = p
               n.opt = debug

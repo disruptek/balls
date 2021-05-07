@@ -411,7 +411,7 @@ proc renderSource(t: Test): NimNode =
   result = t.output(repr(node).numberLines(info.line).prefixLines emojiSource)
 
 proc setExitCode(t: Test; code = QuitFailure): NimNode =
-  let setResult = bindSym"setProgramResult"
+  let setResult = bindSym"setBallsResult"
   when false:
     let isAtty = bindSym"isAtty"
     # if not isAtty(stderr): setResult(code)
