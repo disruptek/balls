@@ -56,7 +56,9 @@ proc filter(n: NimNode; f: Rewrite): NimNode =
 
 proc combineLiterals(n: NimNode): NimNode =
   ## merges "foo" & "bar" into "foobar"
+
   proc collapser(n: NimNode): NimNode =
+    ## cleaning up useColor conditionals
     case n.kind
     of nnkIfStmt:
       if n.len == 2:
@@ -72,40 +74,44 @@ proc combineLiterals(n: NimNode): NimNode =
     else:
       discard
 
-  proc concatenator(n: NimNode): NimNode =
-    if n.kind in {nnkInfix, nnkCall}:
-      if n.len == 3:
-        if n[0].kind in {nnkSym, nnkIdent}:
-          if n[0].strVal == "&":
-            if n[1].kind == nnkStrLit and n[1].strVal == "":
-              result = n[2]
-            elif n[2].kind == nnkStrLit and n[2].strVal == "":
-              result = n[1]
-            elif {n[1].kind, n[2].kind} == {nnkStrLit}:
-              result = newLit(n[1].strVal & n[2].strVal)
+  template isEmptyStringLiteral(n: NimNode): bool =
+    n.kind == nnkStrLit and n.strVal == ""
 
-  proc combiner(n: NimNode): NimNode =
-    if n.kind == nnkCall:
-      if n.len > 0:
-        if n[0].kind in {nnkIdent, nnkSym}:
-          case n[0].strVal
-          of "$":
-            if n[1].kind == nnkStrLit:
-              result = n[1]
-          of "&":
-            if n.len == 3 and {n[1].kind, n[2].kind} == {nnkStrLit}:
-              result = newLit(n[1].strVal & n[2].strVal)
-          else:
-            discard
+  proc isSimpleConcatenation(n: NimNode): bool =
+    if n.kind in {nnkCall, nnkInfix} and n.len == 3:
+      result = n[0].kind in {nnkIdent, nnkSym} and n[0].strVal == "&"
+
+  proc count(n: NimNode): int =
+    result = 1
+    for child in n.items:
+      result += count child
+
+  proc rewriteLiteralConcatenation(n: NimNode): NimNode =
+    ## merging concatenations including literals
+    if n.isSimpleConcatenation:
+      var a = rewriteLiteralConcatenation n[1]
+      var b = rewriteLiteralConcatenation n[2]
+      # &(exp, "") -> exp
+      if a.isEmptyStringLiteral:
+        result = b
+      # &("", exp) -> exp
+      elif b.isEmptyStringLiteral:
+        result = a
+      # &("foo", "bar") -> "foobar"
+      elif {a.kind, b.kind} == {nnkStrLit}:
+        result = newLit(a.strVal & b.strVal)
+      # &("foo", &("bar", exp)) -> &("foobar", exp)
+      elif a.kind == nnkStrLit and b.isSimpleConcatenation:
+        if b[1].kind == nnkStrLit:
+          result = newCall(ident"&", newLit(a.strVal & b[1].strVal), b[2])
+      # &(&(exp, "foo"), "bar") -> &(exp, "foobar")
+      elif b.kind == nnkStrLit and a.isSimpleConcatenation:
+        if a[2].kind == nnkStrLit:
+          result = newCall(ident"&", a[1], newLit(a[2].strVal & b.strVal))
 
   result = n
-  while true:
-    let preprocess = result
-    result = rewrite(result, collapser)
-    result = rewrite(result, combiner)
-    result = rewrite(result, concatenator)
-    if preprocess == result:
-      break
+  result = rewrite result: collapser
+  result = rewrite result: rewriteLiteralConcatenation
 
 proc comment(n: NimNode): NimNode =
   ## render a comment with the given stringish node
