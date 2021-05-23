@@ -1,4 +1,4 @@
-version = "2.5.3"
+version = "2.5.4"
 author = "disruptek"
 description = "a unittest framework with balls 🔴🟡🟢"
 license = "MIT"

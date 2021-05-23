@@ -180,9 +180,13 @@ when (NimMajor, NimMinor) >= (1, 2):
     opt[danger].add "--panics:on"
     opt[danger].add "--exceptions:goto"
     opt[danger].add "--experimental:strictFuncs"
-    if ci:
-      # notnil is too slow to run locally
-      opt[danger].add "--experimental:strictNotNil"
+    when false:
+      #
+      # removed because if i cannot make it work, i can hardly expect you to
+      #
+      if ci:
+        # notnil is too slow to run locally
+        opt[danger].add "--experimental:strictNotNil"
 else:
   gc.incl refc
 # options common to all profiles
