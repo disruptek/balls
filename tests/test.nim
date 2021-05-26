@@ -47,6 +47,10 @@ suite "a pretty suite shim":
 
   block omitted:
     skip("i just don't wanna")
+  
+  block mostOmitted:
+    skip "i really just don't wanna":
+      {.error: "never got here".}
 
   assert "any statement is a test" != ""
   check r > 0, $r & " is a good test of dynamic messages"
