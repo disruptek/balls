@@ -623,6 +623,13 @@ proc skip*(msg = "skipped") =
   ## Manually skips the remainder of the current test.
   raise newException(SkipError, msg)
 
+template skip*(msg = "skipped", body: untyped) =
+  ## Manually skips the remainder of the current test and 
+  ## stops macro processing.
+  skip(msg)
+  when false:
+    body
+
 proc fail*(msg = "failed") =
   ## Manually fails the current test.
   raise newException(FailError, msg)
