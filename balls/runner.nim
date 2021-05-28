@@ -113,7 +113,11 @@ proc matrixTable*(matrix: Matrix): string =
   # while the matrix has members,
   while matrix.len > 0:
     # reorder the remaining profiles by their display order
-    let profiles = toSeq(matrix.keys).sortedByIt(it.labels)
+    #let profiles = toSeq(matrix.keys).sortedByIt(it.labels)
+    # this is dumb for nim-1.[02] reasons
+    var profiles = toSeq matrix.keys
+    proc byLabels(a, b: auto): int = cmp(a, b)
+    profiles.sort(byLabels, Ascending)
 
     # the first profile in that list is the best one to show next
     var p = profiles[0]
