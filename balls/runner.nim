@@ -94,6 +94,9 @@ proc contains*(matrix: Matrix; p: Profile): bool =
   ## present in the test `matrix`.
   matrix.getOrDefault(p, None) notin {Skip, None}
 
+proc labels(p: Profile): (string, string, string) =
+  (p.fn.shortPath, $p.cp, $p.opt)
+
 proc matrixTable*(matrix: Matrix): string =
   ## Render the `matrix` as a table.
   var matrix = matrix
@@ -109,28 +112,31 @@ proc matrixTable*(matrix: Matrix): string =
 
   # while the matrix has members,
   while matrix.len > 0:
-    # get the next profile
-    for p in matrix.keys:
-      # compose a row name
-      var row = @[p.fn.shortPath, $p.cp, $p.opt]
-      # then iterate over the memory models
-      for mm in MemModel:
-        var profile = p
-        profile.gc = mm
-        # pull the run out of the matrix if possible
-        # (stupid style for nim-1.0 reasons)
-        if profile in matrix:
-          let status = matrix[profile]
-          row.add:
-            if useColor():
-              $statusStyles[status] & $status
-            else:
-              $status
-        else:
-          row.add " "
-        matrix.del profile
-      tab.rows.add row
-      break
+    # reorder the remaining profiles by their display order
+    let profiles = toSeq(matrix.keys).sortedByIt(it.labels)
+
+    # the first profile in that list is the best one to show next
+    var p = profiles[0]
+
+    # compose a row's prefix labels in a lame way
+    var row = @[p.labels[0], p.labels[1], p.labels[2]]
+
+    # then iterate over the memory models and consume any results
+    for mm in MemModel:
+      p.gc = mm
+      # pull the run out of the matrix if possible
+      # (we can't use pop|take whatfer nim-1.0 reasons)
+      if p in matrix:
+        let status = matrix[p]
+        row.add:
+          if useColor():
+            $statusStyles[status] & $status
+          else:
+            $status
+      else:
+        row.add " "
+      matrix.del p        # we have to scrub all matching profiles thusly
+    tab.rows.add row      # we're done with this row; add it to the table
 
   # pass the length of StatusKind.None; this corresponds to the width
   # of the other StatusKind values, in characters, which is 1 for bland
