@@ -76,8 +76,8 @@ proc cmp*(a, b: Profile): int =
   ## Compare Profiles `a`, `b` for the purposes of test ordering.
   ## Note that this comparison does not measure test filename.
   cmper cp
-  cmper opt
   cmper gc
+  cmper opt
 
 proc `<`*(a, b: Profile): bool {.used.} =
   ## Compare Profiles `a`, `b` for the purposes of test ordering.
@@ -430,6 +430,13 @@ proc main*(directory: string; fallback = false) =
     # try to find something good to run in the current directory
     tests = ordered(getCurrentDir(), testsOnly = false)
 
-  # run the best input you found in the order you found it
+  var profiles: seq[Profile]
+  # generate profiles for the ordered inputs
   for test in tests.items:
-    matrix.perform test.profiles
+    profiles = concat(profiles, test.profiles)
+
+  # polish the profile order to smoke the project faster
+  sort profiles
+
+  # run the profiles
+  matrix.perform profiles
