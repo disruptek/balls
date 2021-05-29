@@ -7,6 +7,8 @@ import std/hashes
 import std/algorithm
 import std/strutils
 import std/sequtils
+import std/deques
+import std/math
 
 import ups/sanitize
 
@@ -92,7 +94,7 @@ proc `==`*(a, b: Profile): bool {.used.} =
 proc contains*(matrix: Matrix; p: Profile): bool =
   ## A test result of `None` or `Skip` effectively does not count as being
   ## present in the test `matrix`.
-  matrix.getOrDefault(p, None) notin {Skip, None}
+  matrix.getOrDefault(p, None) notin {None}
 
 proc labels(p: Profile): (string, string, string) =
   (p.fn.shortPath, $p.cp, $p.opt)
@@ -140,7 +142,8 @@ proc matrixTable*(matrix: Matrix): string =
       else:
         row.add " "
       matrix.del p        # we have to scrub all matching profiles thusly
-    tab.rows.add row      # we're done with this row; add it to the table
+    if row[3..^1].join(" ").strip() != "":   # omit rows without any status
+      tab.rows.add row    # we're done with this row; add it to the table
 
   # pass the length of StatusKind.None; this corresponds to the width
   # of the other StatusKind values, in characters, which is 1 for bland
@@ -285,10 +288,10 @@ proc perform*(p: var Profile): StatusKind =
   # certain profiles don't even get attempted
   if p.gc == vm and p.cp != js:
     checkpoint "(skipping NimScript test on $#)" % [ $p.gc ]
-    result = Skip
+    result = None
   elif p.cp == js and p.gc != vm:
     checkpoint "(skipping $# test on $#)" % [ $p.gc, $p.cp ]
-    result = Skip
+    result = None
   else:
     # run it and return the result
     let code = attempt run
@@ -303,15 +306,34 @@ proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
   tables.`[]=`(matrix, p, s)
   checkpoint matrix
 
-proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
+proc lesserTestFailed(matrix: Matrix; p: Profile): bool =
+  ## true if a lesser test already failed, meaning we can
+  ## skip the provided profile safely
+  template dominated(e: typedesc[enum]; f: untyped) {.dirty.} =
+    for f in e.items:
+      if f < p.f:
+        var p = p
+        p.f = f
+        if p in matrix and matrix[p] > Part:
+          return true
+
+  dominated(Optimizer, opt)
+  dominated(Compiler, cp)
+  dominated(MemModel, gc)
+
+proc perform*(matrix: var Matrix; profs: seq[Profile]) =
   ## Try to run `profiles` and fail early if you can.
-  var profiles = profiles
-  sort(profiles, cmp)         # order the profiles
-  for p in profiles.mitems:
-    if p in matrix:
-      checkpoint "error: already ran `" & $p & "`"
-      quit 1
-    matrix[p] = perform p
+  # sort the profiles and put them in a deque for easier consumption
+  var profiles = initDeque[Profile](nextPowerOfTwo profs.len)
+  for p in sorted(profs, cmp).items:         # order the profiles
+    profiles.addLast p
+  while profiles.len > 0:
+    var p = profiles.popFirst
+    matrix[p] =
+      if lesserTestFailed(matrix, p):
+        Skip
+      else:
+        perform p
 
     const MajorMinor = $NimMajor & "." & $NimMinor
     if matrix[p] > Part:
