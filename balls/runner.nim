@@ -93,7 +93,7 @@ proc `==`*(a, b: Profile): bool {.used.} =
 proc contains*(matrix: Matrix; p: Profile): bool =
   ## A test result of `None` or `Skip` effectively does not count as being
   ## present in the test `matrix`.
-  matrix.getOrDefault(p, None) notin {Skip, None}
+  matrix.getOrDefault(p, None) notin {None}
 
 proc labels(p: Profile): (string, string, string) =
   (p.fn.shortPath, $p.cp, $p.opt)
@@ -141,7 +141,8 @@ proc matrixTable*(matrix: Matrix): string =
       else:
         row.add " "
       matrix.del p        # we have to scrub all matching profiles thusly
-    tab.rows.add row      # we're done with this row; add it to the table
+    if row[3..^1].join(" ").strip() != "":   # omit rows without any status
+      tab.rows.add row    # we're done with this row; add it to the table
 
   # pass the length of StatusKind.None; this corresponds to the width
   # of the other StatusKind values, in characters, which is 1 for bland
@@ -286,10 +287,10 @@ proc perform*(p: var Profile): StatusKind =
   # certain profiles don't even get attempted
   if p.gc == vm and p.cp != js:
     checkpoint "(skipping NimScript test on $#)" % [ $p.gc ]
-    result = Skip
+    result = None
   elif p.cp == js and p.gc != vm:
     checkpoint "(skipping $# test on $#)" % [ $p.gc, $p.cp ]
-    result = Skip
+    result = None
   else:
     # run it and return the result
     let code = attempt run
@@ -327,10 +328,11 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
     profiles.addLast p
   while profiles.len > 0:
     var p = profiles.popFirst
-    if lesserTestFailed(matrix, p):
-      matrix[p] = Skip
-    else:
-      matrix[p] = perform p
+    matrix[p] =
+      if lesserTestFailed(matrix, p):
+        Skip
+      else:
+        perform p
 
     const MajorMinor = $NimMajor & "." & $NimMinor
     if matrix[p] > Part:
