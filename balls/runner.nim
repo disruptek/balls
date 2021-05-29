@@ -7,6 +7,7 @@ import std/hashes
 import std/algorithm
 import std/strutils
 import std/sequtils
+import std/deques
 
 import ups/sanitize
 
@@ -303,15 +304,33 @@ proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
   tables.`[]=`(matrix, p, s)
   checkpoint matrix
 
-proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
+proc lesserTestFailed(matrix: Matrix; p: Profile): bool =
+  ## true if a lesser test already failed, meaning we can
+  ## skip the provided profile safely
+  template dominated(e: typedesc[enum]; f: untyped) {.dirty.} =
+    for f in e.items:
+      if f < p.f:
+        var p = p
+        p.f = f
+        if p in matrix and matrix[p] > Part:
+          return true
+
+  dominated(Optimizer, opt)
+  dominated(Compiler, cp)
+  dominated(MemModel, gc)
+
+proc perform*(matrix: var Matrix; profs: seq[Profile]) =
   ## Try to run `profiles` and fail early if you can.
-  var profiles = profiles
-  sort(profiles, cmp)         # order the profiles
-  for p in profiles.mitems:
-    if p in matrix:
-      checkpoint "error: already ran `" & $p & "`"
-      quit 1
-    matrix[p] = perform p
+  # sort the profiles and put them in a deque for easier consumption
+  var profiles = initDeque[Profile](profs.len)
+  for p in sorted(profs, cmp).items:         # order the profiles
+    profiles.addLast p
+  while profiles.len > 0:
+    var p = profiles.popFirst
+    if lesserTestFailed(matrix, p):
+      matrix[p] = Skip
+    else:
+      matrix[p] = perform p
 
     const MajorMinor = $NimMajor & "." & $NimMinor
     if matrix[p] > Part:
