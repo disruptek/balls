@@ -367,7 +367,7 @@ proc shouldPass(p: Profile): bool =
     if p.gc <= arc:
       result = true
   # don't quit when run locally; just keep chugging away
-  if ci and ballsFailFast and not result:
+  if ci and ballsFailFast:
     # neither cpp or js backends are expected to work 100% of the time
     if p.cp notin {cpp, js}:
       # arc and orc are still too unreliable to demand successful runs
