@@ -7,7 +7,7 @@ import std/hashes
 import std/algorithm
 import std/strutils
 import std/sequtils
-import std/deques
+import std/heapqueue
 import std/math
 
 import ups/sanitize
@@ -349,11 +349,9 @@ proc lesserTestFailed(matrix: Matrix; p: Profile): bool =
 proc perform*(matrix: var Matrix; profs: seq[Profile]) =
   ## Try to run `profiles` and fail early if you can.
   # sort the profiles and put them in a deque for easier consumption
-  var profiles = initDeque[Profile](nextPowerOfTwo profs.len)
-  for p in sorted(profs, cmp).items:         # order the profiles
-    profiles.addLast p
+  var profiles = profs.toHeapQueue
   while profiles.len > 0:
-    var p = profiles.popFirst
+    var p = profiles.pop
     matrix[p] =
       if lesserTestFailed(matrix, p):
         Skip
