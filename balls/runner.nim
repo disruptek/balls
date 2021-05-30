@@ -286,8 +286,18 @@ proc options(p: Profile): seq[string] =
   when (NimMajor, NimMinor) == (1, 2):
     result.add "--sinkInference:off"
 
+func nonsensical(p: Profile): bool =
+  ## certain profiles need not be attempted
+  if p.gc == vm and p.cp != js:
+    true
+  elif p.cp == js and p.gc != vm:
+    true
+  else:
+    false
+
 proc perform*(p: var Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
+  assert not p.nonsensical
   let pattern =
     if p.gc == vm:
       "nim $1 $3"
@@ -305,21 +315,11 @@ proc perform*(p: var Profile): StatusKind =
   # add the hints into the invocation ahead of the filename
   run.add hs & " " & p.fn
 
-  # certain profiles don't even get attempted
-  if p.gc == vm and p.cp != js:
-    checkpoint "(skipping NimScript test on $#)" % [ $p.gc ]
-    result = None
-  elif p.cp == js and p.gc != vm:
-    checkpoint "(skipping $# test on $#)" % [ $p.gc, $p.cp ]
-    result = None
-  else:
-    # run it and return the result
-    let code = attempt run
-    case code
-    of 0:
-      result = Pass
-    else:
-      result = Fail
+  # run it and return the result
+  result =
+    case attempt run
+    of 0: Pass
+    else: Fail
 
 proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
   ## emit the matrix report whenever it changes
@@ -397,7 +397,8 @@ proc profiles*(fn: string): seq[Profile] =
       for gc in gc.items:
         for cp in cp.items:
           var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
-          result.add profile
+          if not profile.nonsensical:
+            result.add profile
 
 proc ordered*(directory: string; testsOnly = true): seq[string] =
   ## Order a directory tree of test files usefully; set `testsOnly`
