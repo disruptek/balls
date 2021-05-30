@@ -332,10 +332,15 @@ proc lesserTestFailed(matrix: Matrix; p: Profile): bool =
   template dominated(e: typedesc[enum]; f: untyped) {.dirty.} =
     for f in e.items:
       if f < p.f:
-        var p = p
-        p.f = f
-        if p in matrix and matrix[p] > Part:
-          return true
+        var t = p
+        t.f = f
+        if t in matrix and matrix[t] > Part:
+          # a tiny hack to ensure that vm dominance is separate
+          when e is MemModel:
+            if (t.gc == vm) == (p.gc == vm):
+              return true
+          else:
+            return true
 
   dominated(Optimizer, opt)
   #dominated(Compiler, cp)
