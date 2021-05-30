@@ -8,6 +8,7 @@ import std/algorithm
 import std/strutils
 import std/sequtils
 import std/heapqueue
+import std/rlocks
 
 import ups/sanitize
 
@@ -46,8 +47,15 @@ type
     cp*: Compiler
     opt*: Optimizer
     gc*: MemModel
-    ran*: string
     fn*: string
+
+  Payload = object
+    cache: ptr RLock
+    profile: Profile
+    #status: ref StatusKind
+    status: ptr StatusKind         # ptr is necessary for non-arc nims
+
+  TestThread = Thread[Payload]
 
 proc hash*(p: Profile): Hash =
   ## Two Profiles that `hash` identically share a test result in the Matrix.
@@ -204,6 +212,9 @@ else:
 # options common to all profiles
 var defaults = @["""--path=".""""]  # work around early nim behavior
 
+when compileOption"threads":
+  defaults.add "--parallelBuild:0"
+
 if (NimMajor, NimMinor) >= (1, 6):
   # always use IC if it's available
   defaults.add "--incremental:on"
@@ -248,9 +259,16 @@ proc cache(p: Profile): string =
 
 proc attempt(cmd: string): int =
   ## attempt execution of a random command; returns the exit code
-  checkpoint "$ " & cmd
   try:
-    result = execCmd cmd
+    when compileOption"threads":
+      var output: string
+      (output, result) = execCmdEx cmd
+      if result != 0:
+        checkpoint "$ " & cmd
+        checkpoint output
+    else:
+      checkpoint "$ " & cmd
+      result = execCmd cmd
   except OSError as e:
     checkpoint "$1: $2" % [ $e.name, e.msg ]
     result = 1
@@ -294,29 +312,31 @@ func nonsensical(p: Profile): bool =
   else:
     false
 
-proc perform*(p: var Profile): StatusKind =
-  ## Run a single Profile `p` and return its StatusKind.
-  assert not p.nonsensical
+proc run*(p: Profile; withHints = false): string =
+  ## compose the interesting parts of the compiler invocation
   let pattern =
     if p.gc == vm:
       "nim $1 $3"
     else:
       "nim $1 --gc:$2 $3"
-  # we also use it to determine which hints to include
-  let hs = hints(p, ci)
 
-  # compose the remainder of the command-line
-  var run = pattern % [$p.cp, $p.gc, join(p.options, " ")]
+  result = pattern % [$p.cp, $p.gc, join(p.options, " ")]
 
-  # store the command-line with the filename for c+p reasons
-  p.ran = run & " " & p.fn
+  if withHints:
+    # determine which hints to include
+    let hs = hints(p, ci)
+    # add the hints into the invocation ahead of the filename
+    result &= " " & hs
 
-  # add the hints into the invocation ahead of the filename
-  run.add hs & " " & p.fn
+  # return the command-line with the filename for c+p reasons
+  result &= " " & p.fn
 
-  # run it and return the result
+
+proc perform*(p: Profile): StatusKind =
+  ## Run a single Profile `p` and return its StatusKind.
+  assert not p.nonsensical
   result =
-    case attempt run
+    case attempt p.run(withHints = true)
     of 0: Pass
     else: Fail
 
@@ -325,18 +345,53 @@ proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
   tables.`[]=`(matrix, p, s)
   checkpoint matrix
 
-proc lesserTestFailed(matrix: Matrix; p: Profile): bool =
+proc shouldPass(p: Profile): bool =
+  ## true if the test should pass according to current nim climate
+  const MajorMinor = $NimMajor & "." & $NimMinor
+  case MajorMinor
+  of "1.4":
+    if p.gc <= orc:
+      result = true
+  of "1.2":
+    if p.gc <= arc:
+      result = true
+  # don't quit when run locally; just keep chugging away
+  if ci and ballsFailFast and not result:
+    # neither cpp or js backends are expected to work 100% of the time
+    if p.cp notin {cpp, js}:
+      # arc and orc are still too unreliable to demand successful runs
+      if p.gc notin {arc, orc}:
+        # danger builds can fail; they include experimental features
+        if p.opt notin {danger}:
+          result = true
+
+proc performThreaded(p: Payload) {.thread.} =
+  var ran: string
+  {.gcsafe.}:
+    ran = p.profile.run
+    withRLock p.cache[]:
+      p.status[] = perform p.profile
+  case p.status[]
+  of Pass:
+    discard
+  else:
+    if p.profile.shouldPass:
+      # if we should crash, go ahead and raise
+      raise CatchableError.newException:
+        "failure: " & $p.profile & "\n" & ran
+
+proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
   ## true if a lesser test already failed, meaning we can
   ## skip the provided profile safely
-  template dominated(e: typedesc[enum]; f: untyped) {.dirty.} =
-    for f in e.items:
-      if f < p.f:
-        var t = p
-        t.f = f
-        if t in matrix and matrix[t] > Part:
+  template dominated(e: typedesc[enum]; field: untyped) {.dirty.} =
+    for value in e.items:
+      if value < profile.field:
+        var test = profile
+        test.field = value
+        if test in matrix and matrix[test] > Part:
           # a tiny hack to ensure that vm dominance is separate
           when e is MemModel:
-            if (t.gc == vm) == (p.gc == vm):
+            if (test.gc == vm) == (profile.gc == vm):
               return true
           else:
             return true
@@ -346,48 +401,63 @@ proc lesserTestFailed(matrix: Matrix; p: Profile): bool =
   dominated(MemModel, gc)
 
 proc perform*(matrix: var Matrix; profs: seq[Profile]) =
-  ## Try to run `profiles` and fail early if you can.
-  # sort the profiles and put them in a deque for easier consumption
-  var profiles = profs.toHeapQueue
+  ## Try to run `profs` and fail early if you can.
+  var threads = newSeqOfCap[TestThread](profs.len)
+  var locks = initTable[string, RLock](2)
+  #var profiles = profs.toHeapQueue   # only works in later nims
+  var profiles: HeapQueue[Profile]
+  for p in profs.items:
+    profiles.push p
+
+  # we need to enlarge the matrix table and pre-allocate the status
+  # values so that we can pass them as pointers to the threads
+  for p in profs.items:
+    # safely re-entrant, and []= would print the table... 😉
+    discard matrix.hasKeyOrPut(p, None)
+    # allocate and initialize locks for the nimcaches while we're at it
+    if p.cache notin locks:
+      locks[p.cache] = default RLock
+      initRLock locks[p.cache]
+
   while profiles.len > 0:
     var p = profiles.pop
-    matrix[p] =
+    if p notin matrix:
       if lesserTestFailed(matrix, p):
-        Skip
+        matrix[p] = Skip
       else:
-        perform p
+        setLen(threads, threads.len + 1)
+        createThread threads[^1], performThreaded:
+          Payload(cache: addr locks[p.cache], profile: p,
+                  status: addr matrix[p])
 
-    const MajorMinor = $NimMajor & "." & $NimMinor
-    if matrix[p] > Part:
-      case MajorMinor
-      of "1.4":
-        if p.gc > orc:
-          continue
-      of "1.2":
-        if p.gc > arc:
-          continue
-      else:
-        discard
-      checkpoint p.ran
-      checkpoint "failed; compiler:"
+  try:
+    var count = threads.len
+    while threads.anyIt it.running:
+      sleep 250
+      let running = threads.countIt it.running
+      if running != count:
+        checkpoint matrix
+        count = running
+  except CatchableError as e:
+    checkpoint e.msg
+    quit 1
+  finally:
+    checkpoint matrix
+
+  for p in matrix.keys:
+    if matrix[p] > Part and p.shouldPass:
+      checkpoint p.run
+      setBallsResult int(matrix[p] > Part)
+      # before we fail the ci, run a debug test for shits and grins
+      var n = p
+      n.opt = debug
+      if n notin matrix:      # a safer solution
+        discard perform n
+        matrix[n] = Info
+      checkpoint "failure; compiler:"
       flushStderr()   # hope we beat the compiler's --version
       discard execCmd "nim --version"
-      # don't quit when run locally; just keep chugging away
-      if ci and ballsFailFast:
-        # neither cpp or js backends are expected to work 100% of the time
-        if p.cp notin {cpp, js}:
-          # arc and orc are still too unreliable to demand successful runs
-          if p.gc notin {arc, orc}:
-            # danger builds can fail; they include experimental features
-            if p.opt notin {danger, debug}:
-              setBallsResult int(matrix[p] > Part)
-              # before we fail the ci, run a debug test for shits and grins
-              var n = p
-              n.opt = debug
-              if n notin matrix:      # a safer solution
-                discard perform n
-                matrix[n] = Info
-              quit 1
+      quit 1
 
 proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
@@ -485,13 +555,10 @@ proc main*(directory: string; fallback = false) =
     # try to find something good to run in the current directory
     tests = ordered(getCurrentDir(), testsOnly = false)
 
-  var profiles: seq[Profile]
   # generate profiles for the ordered inputs
+  var profiles: seq[Profile]
   for test in tests.items:
-    profiles = concat(profiles, test.profiles)
-
-  # polish the profile order to smoke the project faster
-  sort profiles
+    profiles &= test.profiles
 
   try:
     # run the profiles
