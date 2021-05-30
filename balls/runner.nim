@@ -400,6 +400,12 @@ proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
   #dominated(Compiler, cp)
   dominated(MemModel, gc)
 
+proc countRunning(threads: seq[TestThread]): int =
+  ## a countIt for early nims 🙄
+  for thread in threads.items:
+    if thread.running:
+      inc result
+
 proc perform*(matrix: var Matrix; profs: seq[Profile]) =
   ## Try to run `profs` and fail early if you can.
   var threads = newSeqOfCap[TestThread](profs.len)
@@ -434,7 +440,7 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
     var count = threads.len
     while threads.anyIt it.running:
       sleep 250
-      let running = threads.countIt it.running
+      let running = countRunning threads
       if running != count:
         checkpoint matrix
         count = running
