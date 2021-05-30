@@ -338,7 +338,7 @@ proc lesserTestFailed(matrix: Matrix; p: Profile): bool =
           return true
 
   dominated(Optimizer, opt)
-  dominated(Compiler, cp)
+  #dominated(Compiler, cp)
   dominated(MemModel, gc)
 
 proc perform*(matrix: var Matrix; profs: seq[Profile]) =
