@@ -287,6 +287,17 @@ proc options(p: Profile): seq[string] =
   # specify the nimcache directory
   result.add "--nimCache:" & p.cache
 
+  # use an unlikely filename for output
+  let output =
+    when compileOption"threads":
+      "$#_$#_$#" % [ short(p.fn), $getThreadId(), $hash(p) ]
+    else:
+      "$#_$#" % [ short(p.fn), $hash(p) ]
+  result.add "--out:\"$#\"" % [ output ]
+
+  # use the nimcache for our output directory
+  result.add "--outdir:\"$#\"" % [ p.cache ]   # early nims dunno $nimcache
+
   # turn off panics on 1.4 because writeStackTrace breaks js builds
   if p.cp == js:
     when (NimMajor, NimMinor) == (1, 4):
