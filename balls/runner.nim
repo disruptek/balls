@@ -8,7 +8,6 @@ import std/algorithm
 import std/strutils
 import std/sequtils
 import std/heapqueue
-import std/math
 
 import ups/sanitize
 
