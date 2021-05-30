@@ -230,6 +230,23 @@ else:
   # do a danger build locally so we can check time/space; omit release
   opt.del release
 
+proc cache(p: Profile): string =
+  ## come up with a unique cache directory according to where you'd like
+  ## to thread your compilations under ci or local environments.
+  ## the thinking here is that local tests vary by filename while the ci
+  ## tests vary primarily by garbage collector.
+  when compileOption"threads":
+    var suffix =
+      if ci:
+        "$#.$#.$#" % [ $p.cp, $p.opt, $p.gc ]
+      else:
+        "$#.$#.$#" % [ $hash(p.fn), $p.cp, $p.opt ]
+  else:
+    var suffix = $p.cp  # no threads; use a unique cache for each backend
+
+  result = getTempDir()
+  result = result / "balls-nimcache-$#-$#" % [ suffix, $getCurrentProcessId() ]
+
 proc attempt(cmd: string): int =
   ## attempt execution of a random command; returns the exit code
   checkpoint "$ " & cmd
@@ -249,6 +266,9 @@ proc options(p: Profile): seq[string] =
   # add in any command-line arguments
   for index in 1 .. paramCount():
     result.add paramStr(index)
+
+  # specify the nimcache directory
+  result.add "--nimCache:" & p.cache
 
   # turn off panics on 1.4 because writeStackTrace breaks js builds
   if p.cp == js:
@@ -470,5 +490,11 @@ proc main*(directory: string; fallback = false) =
   # polish the profile order to smoke the project faster
   sort profiles
 
-  # run the profiles
-  matrix.perform profiles
+  try:
+    # run the profiles
+    matrix.perform profiles
+
+  finally:
+    # remove any cache directories
+    for p in matrix.keys:
+      removeDir p.cache
