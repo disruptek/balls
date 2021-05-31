@@ -56,6 +56,8 @@ const
   statusStyles*: array[StatusKind, Styling] = [
     None: resetStyle,
     Info: informStyle,
+    Wait: informStyle,
+    Runs: informStyle,
     Pass: successStyle,
     Skip: commentStyle,
     Part: partialStyle,

@@ -395,7 +395,9 @@ proc performThreaded(p: Payload) {.thread.} =
   var ran: string
   {.gcsafe.}:
     ran = p.profile.run
+    p.status[] = Wait
     withRLock p.cache[]:
+      p.status[] = Runs
       p.status[] = perform p.profile
   case p.status[]
   of Pass:

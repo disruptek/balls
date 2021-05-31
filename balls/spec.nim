@@ -64,6 +64,8 @@ when ballsDry:
     StatusKind* = enum      ## possible test results
       None = " "      ## (undefined)
       Info = "⊚"      ## may prefix information
+      Wait = "⏲"      ## pending cache access
+      Runs = "🮲"      ## currently runs
       Pass = "●"      ## total success
       Skip = "⸮"      ## test was skipped
       Part = "◐"      ## partial success
@@ -79,6 +81,8 @@ else:
     StatusKind* = enum      ## possible test results
       None = "  "          ## (undefined)
       Info = "🔵"          ## may prefix information
+      Wait = "⏳"          ## pending cache access
+      Runs = "🏃"          ## currently runs
       Pass = "🟢"          ## total success
       Skip = "❔"          ## test was skipped
       Part = "🟡"          ## partial success
