@@ -152,3 +152,16 @@ proc flushStderr*() {.noconv, used.} =
   ## Convenience for flushing stderr during process exit.
   when not defined(js):
     flushFile stderr
+
+when compileOption"threads":
+  import std/rlocks
+  var clobber {.global.}: RLock
+
+  template noclobber*(body: untyped) =
+    ## serialize access to the body; usually for output reasons
+    once:
+      initRLock clobber
+    withRLock clobber:
+      body
+else:
+  template noclobber*(body: untyped) = body

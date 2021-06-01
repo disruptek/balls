@@ -159,10 +159,11 @@ proc numberLines(s: string; first = 1): NimNode =
 
 proc checkpoint*(ss: varargs[string, `$`]) =
   ## Like `echo`, but outputs to `stderr` with the other test output.
-  when defined(js):
-    echo ss.join(" ")
-  else:
-    writeLine(stderr, ss.join(" "))
+  noclobber:
+    when defined(js):
+      echo ss.join(" ")
+    else:
+      writeLine(stderr, ss.join(" "))
 
 proc output(n: NimNode): NimNode =
   assert not n.isNil
@@ -624,7 +625,7 @@ proc skip*(msg = "skipped") =
   raise newException(SkipError, msg)
 
 template skip*(msg = "skipped", body: untyped) =
-  ## Manually skips the remainder of the current test and 
+  ## Manually skips the remainder of the current test and
   ## stops macro processing.
   skip(msg)
   when false:

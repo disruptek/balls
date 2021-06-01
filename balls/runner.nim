@@ -50,10 +50,8 @@ type
     fn*: string
 
   Payload = object
-    output: ptr RLock
     cache: ptr RLock
     profile: Profile
-    #status: ref StatusKind
     status: ptr StatusKind         # ptr is necessary for non-arc nims
 
   TestThread = Thread[Payload]
@@ -181,15 +179,6 @@ proc hints*(p: Profile; ci: bool): string =
   for warning in omit.items:
     result.add " --warning[$#]=off" % [ warning ]
 
-var output: RLock    # the output lock
-initRLock output     # locks all output
-template noclobber(body: untyped) =
-  when compileOption"threads":
-    withRLock output:
-      body
-  else:
-    body
-
 let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
 var matrix: Matrix
 # set some default matrix members (profiles)
@@ -278,18 +267,15 @@ proc attempt(cmd: string): int =
           checkpoint "$ " & cmd
           checkpoint output
     else:
-      noclobber:
-        checkpoint "$ " & cmd
+      checkpoint "$ " & cmd
       result = execCmd cmd
   except OSError as e:
-    noclobber:
-      checkpoint "$1: $2" % [ $e.name, e.msg ]
+    checkpoint "$1: $2" % [ $e.name, e.msg ]
     result = 1
 
 proc checkpoint(matrix: Matrix) =
-  noclobber:
-    checkpoint:
-      "\n" & matrixTable(matrix) & "\n"
+  checkpoint:
+    "\n" & matrixTable(matrix) & "\n"
 
 proc options(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
@@ -368,8 +354,7 @@ proc perform*(p: Profile): StatusKind =
 proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
   ## emit the matrix report whenever it changes
   tables.`[]=`(matrix, p, s)
-  noclobber:
-    checkpoint matrix
+  checkpoint matrix
 
 proc shouldPass(p: Profile): bool =
   ## true if the test should pass according to current nim climate
@@ -453,38 +438,31 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
       locks[p.cache] = default RLock
       initRLock locks[p.cache]
 
-  while profiles.len > 0:
-    var p = profiles.pop
-    if p notin matrix:
-      if lesserTestFailed(matrix, p):
-        matrix[p] = Skip
-      else:
-        setLen(threads, threads.len + 1)
-        createThread threads[^1], performThreaded:
-          Payload(cache: addr locks[p.cache], profile: p,
-                  output: addr output, status: addr matrix[p])
-
   try:
+    while profiles.len > 0:
+      var p = profiles.pop
+      if p notin matrix:
+        if lesserTestFailed(matrix, p):
+          matrix[p] = Skip
+        else:
+          setLen(threads, threads.len + 1)
+          createThread threads[^1], performThreaded:
+            Payload(cache: addr locks[p.cache], profile: p,
+                    status: addr matrix[p])
+
     var count = threads.len
     while threads.anyIt it.running:
       sleep 250
       let running = countRunning threads
       if running != count:
-        noclobber:
-          checkpoint matrix
+        checkpoint matrix
         count = running
   except CatchableError as e:
-    noclobber:
-      checkpoint e.msg
-    quit 1
-  finally:
-    noclobber:
-      checkpoint matrix
+    checkpoint e.msg
 
   for p in matrix.keys:
     if matrix[p] > Part and p.shouldPass:
-      noclobber:
-        checkpoint p.run
+      checkpoint p.run
       setBallsResult int(matrix[p] > Part)
       # before we fail the ci, run a debug test for shits and grins
       var n = p
@@ -492,10 +470,12 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
       if n notin matrix:      # a safer solution
         discard perform n
         matrix[n] = Info
-      noclobber:
+      let (s, code) = execCmdEx "nim --version"
+      if code == 0:
         checkpoint "failure; compiler:"
-        flushStderr()   # hope we beat the compiler's --version
-      discard execCmd "nim --version"
+        checkpoint s
+      else:
+        checkpoint "failure; unable to determine compiler version"
       quit 1
 
 proc profiles*(fn: string): seq[Profile] =
