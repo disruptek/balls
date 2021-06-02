@@ -8,6 +8,9 @@ import std/algorithm
 import std/strutils
 import std/sequtils
 import std/heapqueue
+
+when not compileOption"threads":
+  {.error: "balls currently requires threads".}
 import std/rlocks
 
 import ups/sanitize
