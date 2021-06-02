@@ -497,6 +497,7 @@ proc ordered*(directory: string; testsOnly = true): seq[string] =
   ## Order a directory tree of test files usefully; set `testsOnly`
   ## for rigid "must start with a t and end with .nim" behavior.  If
   ## `testsOnly` is set, the search is recursive.
+  if not directory.dirExists: return @[]
   if testsOnly:
     # collect the filenames recursively, but only .nim
     for test in walkDirRec(directory, yieldFilter = {pcFile, pcLinkToFile}):
@@ -571,13 +572,21 @@ proc main*(directory: string; fallback = false) =
   ## Run each test in the `directory` in a useful order; set `fallback` to
   ## `true` to fall back to a loose search in the current directory for
   ## testable code.
-
+  var tests: seq[string]
   # first check the supplied directory
-  var tests = ordered directory
-  # if there are no tests in the directory,
-  if tests.len == 0:
-    # try to find something good to run in the current directory
-    tests = ordered(getCurrentDir(), testsOnly = false)
+  tests = ordered directory
+  try:
+    # if there are no tests in the directory,
+    if tests.len == 0:
+      # try to find something good to run in the current directory
+      tests = ordered(getCurrentDir(), testsOnly = false)
+    if tests.len == 0:
+      checkpoint "couldn't find any tests to run; that's good, right?"
+      quit 0
+  except OSError as e:
+    checkpoint "bad news about the current directory... it's gone?"
+    checkpoint "the os says `$#`" % [ e.msg ]
+    quit 1
 
   # generate profiles for the ordered inputs
   var profiles: seq[Profile]
