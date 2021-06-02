@@ -222,7 +222,9 @@ if (NimMajor, NimMinor) >= (1, 6):
   defaults.add "--incremental:on"
 elif ci:
   # otherwise, force rebuild only on CI
-  defaults.add "--forceBuild:on"
+  if not compileOption"threads":
+    # and only outside threads
+    defaults.add "--forceBuild:on"
   when (NimMajor, NimMinor) >= (1, 5):
     # force incremental off so as not to get confused by a config file
     defaults.add "--incremental:off"
