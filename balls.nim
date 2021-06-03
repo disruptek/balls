@@ -184,12 +184,13 @@ macro report(n: string) =
   ## render a multi-line comment
   var prefix = $lineNumStyle & "## " & $commentStyle
   var postfix = newLit resetStyle.string
-  result = nnkIfStmt.newTreeFrom n:
-    nnkElifExpr.newTreeFrom n:
-      newCall bindSym"useColor"
-      output infix(prefixLines(n, prefix), "&", postfix)
-    nnkElse.newTree:
-      output prefixLines(n, "## ")
+  result =
+    nnkIfStmt.newTreeFrom n:
+      nnkElifExpr.newTreeFrom n:
+        newCall bindSym"useColor"
+        output infix(prefixLines(n, prefix), "&", postfix)
+      nnkElse.newTree:
+        output prefixLines(n, "## ")
 
 proc report(n: NimNode): NimNode =
   result = getAst(report n)
@@ -464,14 +465,15 @@ proc skipped(t: var Test; n: NimNode): NimNode =
   ## what to do when a test is skipped
   assert not n.isNil
   t.status = Skip
-  result = nnkStmtList.newTreeFrom n:
-    t.incResults
-    t.output:
-      nestList bindSym"&":
-        nnkStmtList.newTreeFrom n:
-          skippedStyle & t.name.newLit
-          newLit": "
-          n.dotMsg
+  result =
+    nnkStmtList.newTreeFrom n:
+      t.incResults
+      t.output:
+        nestList bindSym"&":
+          nnkStmtList.newTreeFrom n:
+            skippedStyle & t.name.newLit
+            newLit": "
+            n.dotMsg
 
 proc exception(t: var Test; n: NimNode): NimNode =
   ## what to do when a test raises an exception
@@ -560,15 +562,16 @@ when defined(danger):
       newCall(bindSym"abs", n)
     template kute(n: untyped): NimNode =
       newCall(bindSym"$", newCall(bindSym"Kute", n))
-    result = nnkIfExpr.newTreeFrom n:
-      nnkElifBranch.newTreeFrom n:
-        infix(n, ">", 0.newLit)                # if n > 0:
-        infix(newLit"+", "&", kute(n))         #   "+" & kute(n)
-      nnkElifBranch.newTreeFrom n:
-        infix(n, "==", 0.newLit)               # elif n == 0:
-        newLit""                               #   ""
-      nnkElse.newTree:                         # else:
-        infix(newLit"-", "&", kute(abs n))     #   "-" & kute(abs n)
+    result =
+      nnkIfExpr.newTreeFrom n:
+        nnkElifBranch.newTreeFrom n:
+          infix(n, ">", 0.newLit)                # if n > 0:
+          infix(newLit"+", "&", kute(n))         #   "+" & kute(n)
+        nnkElifBranch.newTreeFrom n:
+          infix(n, "==", 0.newLit)               # elif n == 0:
+          newLit""                               #   ""
+        nnkElse.newTree:                         # else:
+          infix(newLit"-", "&", kute(abs n))     #   "-" & kute(abs n)
 
 proc postTest(test: Test): NimNode =
   ## run this after a test has completed
@@ -645,28 +648,29 @@ proc wrapExcept(t: var Test): NimNode =
   var e2 {.used.} = genSym(nskLet, "e")
   var e3 {.used.} = genSym(nskLet, "e")
   var e4 {.used.} = genSym(nskLet, "e")
-  result = nnkTryStmt.newTreeFrom t.code:
-    # the body of the try statement is the instrumented test
-    t.node
-    # test failures are implemented as exceptions
-    nnkExceptBranch.newTreeFrom t.code:
-      infix(failing, "as", e4)
-      badassert(t, e4)
-    # test skipping is implemented via exceptions
-    nnkExceptBranch.newTreeFrom t.code:
-      infix(skipping, "as", e1)
-      skipped(t, e1)
-    # failed assertions from `assert` are caught here
-    nnkExceptBranch.newTreeFrom t.code:
-      infix(assertion, "as", e2)
-      badassert(t, e2)
-    # random exceptions in the tests are still catchable
-    nnkExceptBranch.newTreeFrom t.code:
-      infix(catchall, "as", e3)
-      exception(t, e3)
-    # finally, perform any post-test reporting
-    nnkFinally.newTree:
-      postTest t
+  result =
+    nnkTryStmt.newTreeFrom t.code:
+      # the body of the try statement is the instrumented test
+      t.node
+      # test failures are implemented as exceptions
+      nnkExceptBranch.newTreeFrom t.code:
+        infix(failing, "as", e4)
+        badassert(t, e4)
+      # test skipping is implemented via exceptions
+      nnkExceptBranch.newTreeFrom t.code:
+        infix(skipping, "as", e1)
+        skipped(t, e1)
+      # failed assertions from `assert` are caught here
+      nnkExceptBranch.newTreeFrom t.code:
+        infix(assertion, "as", e2)
+        badassert(t, e2)
+      # random exceptions in the tests are still catchable
+      nnkExceptBranch.newTreeFrom t.code:
+        infix(catchall, "as", e3)
+        exception(t, e3)
+      # finally, perform any post-test reporting
+      nnkFinally.newTree:
+        postTest t
 
 proc makeTest(n: NimNode; name: string): Test =
   ## we're given `n`, which is a block: or something, and a test name.
@@ -710,11 +714,12 @@ proc makeTest(n: NimNode; name: string): Test =
     let compilationOkay =
       ident"compiles".newCall:
         nnkBlockStmt.newTree(newEmptyNode(), result.code)
-    result.node = nnkWhenStmt.newTreeFrom n:
-      # successful compilation invokes the test `node`
-      nnkElifBranch.newTree(compilationOkay, result.node)
-      # compilation failure invokes compilerr on the Test
-      nnkElse.newTree(compilerr result)
+    result.node =
+      nnkWhenStmt.newTreeFrom n:
+        # successful compilation invokes the test `node`
+        nnkElifBranch.newTree(compilationOkay, result.node)
+        # compilation failure invokes compilerr on the Test
+        nnkElse.newTree(compilerr result)
 
 proc rewriteTestBlock(n: NimNode): NimNode =
   ## rewrite test "something": ... as block: ## something ...
