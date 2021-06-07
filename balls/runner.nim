@@ -412,14 +412,20 @@ proc performThreaded(p: Payload) {.thread.} =
     withRLock p.cache[]:
       p.status[] = Runs
       p.status[] = perform p.profile
-  case p.status[]
-  of Pass:
-    discard
-  else:
-    if p.profile.shouldPass:
-      # if we should crash, go ahead and raise
-      raise CatchableError.newException:
-        "failure: " & $p.profile & "\n" & ran
+
+  # we don't conditionally raise anymore because we don't join threads, so
+  # we cannot catch it easily in the parent thread; hence we rely upon the
+  # parent to measure the status.  no big deal.
+  #
+  when false:
+    case p.status[]
+    of Pass:
+      discard
+    else:
+      if p.profile.shouldPass:
+        # if we should crash, go ahead and raise
+        raise CatchableError.newException:
+          "failure: " & $p.profile & "\n" & ran
 
 proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
   ## true if a lesser test already failed, meaning we can
