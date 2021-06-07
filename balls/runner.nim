@@ -29,6 +29,7 @@ type
     c
     cpp
     js
+    e
 
   Optimizer* = enum ## optimization modes that we test
     debug
@@ -105,8 +106,28 @@ proc contains*(matrix: Matrix; p: Profile): bool =
   ## present in the test `matrix`.
   matrix.getOrDefault(p, None) notin {None}
 
-proc labels(p: Profile): (string, string, string) =
-  (p.fn.shortPath, $p.cp, $p.opt)
+proc nearby(p: Profile): (string, int, int) =
+  result = (p.fn.shortPath, ord p.cp, ord p.opt)
+
+when false:
+  proc useEarlyRow(matrix: Matrix; p: Profile): bool =
+    if p.cp in {js, e}:
+      var p = p
+      p.gc = default MemModel
+      p.cp = default Compiler
+      result = p in matrix
+
+iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
+  ## emit the profile permutations appropriate for this row
+  var p = p
+  for mm in MemModel:
+    p.gc = mm
+    if p.gc == vm:
+      p.cp = e
+    yield p
+  p.cp = js
+  p.gc = vm
+  yield p
 
 proc matrixTable*(matrix: Matrix): string =
   ## Render the `matrix` as a table.
@@ -120,25 +141,25 @@ proc matrixTable*(matrix: Matrix): string =
         "m&s"
       else:
         $mm
+  tab.headers.add $js
 
   # while the matrix has members,
   while matrix.len > 0:
     # reorder the remaining profiles by their display order
-    #let profiles = toSeq(matrix.keys).sortedByIt(it.labels)
+    #let profiles = toSeq(matrix.keys).sortedByIt(it.nearby)
     # this is dumb for nim-1.[02] reasons
     var profiles = toSeq matrix.keys
-    proc byLabels(a, b: auto): int = cmp(a, b)
-    profiles.sort(byLabels, Ascending)
+    proc byProximity(a, b: auto): int = cmp(a.nearby, b.nearby)
+    profiles.sort(byProximity, Ascending)
 
     # the first profile in that list is the best one to show next
     var p = profiles[0]
 
     # compose a row's prefix labels in a lame way
-    var row = @[p.labels[0], p.labels[1], p.labels[2]]
+    var row = @[p.fn.shortPath, $p.cp, $p.opt]
 
     # then iterate over the memory models and consume any results
-    for mm in MemModel:
-      p.gc = mm
+    for p in rowPermutations(matrix, p):
       # pull the run out of the matrix if possible
       # (we can't use pop|take whatfer nim-1.0 reasons)
       if p in matrix:
@@ -233,6 +254,7 @@ elif ci:
 if ci:
   cp.add cpp                  # add cpp
   cp.add js                   # add js
+  cp.add e                    # add nimscript
   gc.incl refc                # add refc
   gc.incl markAndSweep        # add markAndSweep
   if arc in gc:               # add orc if arc is available
@@ -321,9 +343,11 @@ proc options(p: Profile): seq[string] =
 
 func nonsensical(p: Profile): bool =
   ## certain profiles need not be attempted
-  if p.gc == vm and p.cp != js:
+  if p.gc == vm and p.cp notin {js, e}:
     true
-  elif p.cp == js and p.gc != vm:
+  elif p.cp in {js, e} and p.gc != vm:
+    true
+  elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
     true
   else:
     false
@@ -346,7 +370,6 @@ proc run*(p: Profile; withHints = false): string =
 
   # return the command-line with the filename for c+p reasons
   result &= " " & p.fn
-
 
 proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
@@ -373,8 +396,8 @@ proc shouldPass(p: Profile): bool =
       result = true
   # don't quit when run locally; just keep chugging away
   if ci and ballsFailFast:
-    # neither cpp or js backends are expected to work 100% of the time
-    if p.cp notin {cpp, js}:
+    # neither cpp or js or nimscript backends are required to work
+    if p.cp notin {cpp, js, e}:
       # arc and orc are still too unreliable to demand successful runs
       if p.gc notin {arc, orc}:
         # danger builds can fail; they include experimental features
