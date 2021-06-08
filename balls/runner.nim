@@ -387,13 +387,6 @@ proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
 proc shouldPass(p: Profile): bool =
   ## true if the test should pass according to current nim climate
   const MajorMinor = $NimMajor & "." & $NimMinor
-  case MajorMinor
-  of "1.4":
-    if p.gc <= orc:
-      result = true
-  of "1.2":
-    if p.gc <= arc:
-      result = true
   # don't quit when run locally; just keep chugging away
   if ci and ballsFailFast:
     # neither cpp or js or nimscript backends are required to work
@@ -402,7 +395,13 @@ proc shouldPass(p: Profile): bool =
       if p.gc notin {arc, orc}:
         # danger builds can fail; they include experimental features
         if p.opt notin {danger}:
-          result = true
+          case MajorMinor
+          of "1.4":
+            if p.gc <= orc:
+              result = true
+          of "1.2":
+            if p.gc <= arc:
+              result = true
 
 proc performThreaded(p: Payload) {.thread.} =
   var ran: string
