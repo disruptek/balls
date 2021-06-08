@@ -14,6 +14,7 @@ when not compileOption"threads":
 import std/rlocks
 
 import ups/sanitize
+import semaphores
 
 import balls/spec
 import balls/style
@@ -78,6 +79,12 @@ proc shortPath(fn: string): string =
 
 proc `$`(p: Profile): string =
   "$#: $# $# $#" % [ short p.fn, $p.cp, $p.gc, $p.opt ]
+
+proc corePhore(): Semaphore =
+  ## produce a semaphore according to the number of available cores
+  result.init 314
+  for core in 1 .. countProcessors():
+    signal result
 
 template cmper(f: untyped) {.dirty.} =
   result = system.cmp(a.`f`, b.`f`)
@@ -403,14 +410,22 @@ proc shouldPass(p: Profile): bool =
             if p.gc <= arc:
               result = true
 
+var cores = corePhore()
+
 proc performThreaded(p: Payload) {.thread.} =
+  ## run perform, but do it in a thread with a lock on the compilation cache
   var ran: string
   {.gcsafe.}:
     ran = p.profile.run
     p.status[] = Wait
     withRLock p.cache[]:
-      p.status[] = Runs
-      p.status[] = perform p.profile
+      wait cores
+      try:
+        p.status[] = Runs
+        p.status[] = perform p.profile
+      finally:
+        # indicate that we're done with the core
+        signal cores
 
   # we don't conditionally raise anymore because we don't join threads, so
   # we cannot catch it easily in the parent thread; hence we rely upon the
