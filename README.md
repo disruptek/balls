@@ -46,10 +46,8 @@ runtime will try to guess how to test your project regardless of its structure, 
 - having a single file `foo.nim` in your `foo` project, or
 - TBD
 
-```
-$ balls
-# ... the test runner runs tests ...
-```
+![runner](docs/runner.svg "test runner")
+
 You can add arguments which will be passed directly to the compiler:
 
 ```

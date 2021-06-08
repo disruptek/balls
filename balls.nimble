@@ -25,4 +25,6 @@ task demo, "produce a demo":
     quit 1
   exec """demo docs/demo.svg "nim c --out=\$1 examples/fails.nim""""
   exec """demo docs/clean.svg "balls -f --out=\$1""""
+  exec "nim c --define:release --define:ballsDry balls.nim"
+  exec """demo docs/runner.svg "balls""""
 

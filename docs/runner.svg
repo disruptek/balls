@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="terminal" baseProfile="full" viewBox="0 0 687 132" width="687" version="1.1">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" id="terminal" baseProfile="full" viewBox="0 0 687 200" width="687" version="1.1">
     <defs>
         <termtosvg:template_settings xmlns:termtosvg="https://github.com/nbedos/termtosvg">
-            <termtosvg:screen_geometry columns="80" rows="3"/>
+            <termtosvg:screen_geometry columns="80" rows="7"/>
             <termtosvg:animation type="css"/>
         </termtosvg:template_settings>
         <style type="text/css" id="generated-style"><![CDATA[#screen {
@@ -43,5 +43,5 @@
     <circle cx="24" cy="23" r="7" class="color1"/>
     <circle cx="44" cy="23" r="7" class="color3"/>
     <circle cx="64" cy="23" r="7" class="color2"/>
-    <svg id="screen" width="640" height="51" x="23" y="50" viewBox="0 0 640 51" preserveAspectRatio="xMidYMin slice"><rect class="background" height="100%" width="100%" x="0" y="0"/><defs><g id="g1"><text x="0" textLength="232" class="foreground">    exec_func(file, *argrest)</text></g><g id="g2"><text x="0" textLength="432" class="foreground">FileNotFoundError: [Errno 2] No such file or directory</text></g><g id="g3"><text x="0" textLength="8" class="background"> </text></g></defs><g><use xlink:href="#g1" y="0"/><use xlink:href="#g2" y="17"/><rect x="0" y="34" width="8" height="17" class="foreground"/><use xlink:href="#g3" y="34"/></g></svg>
+    <svg id="screen" width="640" height="119" x="23" y="50" viewBox="0 0 640 119" preserveAspectRatio="xMidYMin slice"><rect class="background" height="100%" width="100%" x="0" y="0"/><defs><g id="g1"><text x="0" textLength="408" class="foreground">nim-1.0.11  cp     opt  refc  m&amp;s  arc  orc  vm  js</text></g><g id="g2"><text x="0" textLength="408" class="foreground">tests/test   c   debug     &#9679;                       </text></g><g id="g3"><text x="0" textLength="408" class="foreground">tests/test   c  danger     &#9679;                       </text></g><g id="g4"><text x="0" textLength="8" class="background"> </text></g></defs><g><use xlink:href="#g1" y="17"/><use xlink:href="#g2" y="34"/><use xlink:href="#g3" y="51"/><rect x="0" y="85" width="8" height="17" class="foreground"/><use xlink:href="#g4" y="85"/></g></svg>
 </svg>
