@@ -24,7 +24,7 @@ task demo, "produce a demo":
     echo "due to nim bug #16307, use nim-1.0"
     quit 1
   exec """demo docs/demo.svg "nim c --out=\$1 examples/fails.nim""""
-  exec """demo docs/clean.svg "balls -f --out=\$1""""
+  exec """demo docs/clean.svg "nim c --define:danger -f --out=\$1 tests/test.nim""""
   exec "nim c --define:release --define:ballsDry balls.nim"
   exec """demo docs/runner.svg "balls""""
 
