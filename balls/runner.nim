@@ -414,9 +414,7 @@ var cores = corePhore()
 
 proc performThreaded(p: Payload) {.thread.} =
   ## run perform, but do it in a thread with a lock on the compilation cache
-  var ran: string
   {.gcsafe.}:
-    ran = p.profile.run
     p.status[] = Wait
     withRLock p.cache[]:
       wait cores
@@ -439,7 +437,7 @@ proc performThreaded(p: Payload) {.thread.} =
       if p.profile.shouldPass:
         # if we should crash, go ahead and raise
         raise CatchableError.newException:
-          "failure: " & $p.profile & "\n" & ran
+          "failure: " & $p.profile & "\n" & p.profile.run
 
 proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
   ## true if a lesser test already failed, meaning we can
