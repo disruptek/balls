@@ -44,7 +44,10 @@ runtime will try to guess how to test your project regardless of its structure, 
 
 - placing files matching `t*.nim` under a `tests` subdirectory, or
 - having a single file `foo.nim` in your `foo` project, or
-- TBD
+- simply letting balls test all the files in the current directory
+
+The test runner is threaded and runs a comprehensive matrix which tries to
+safely reuse compilation assets.
 
 ![runner](docs/runner.svg "test runner")
 
