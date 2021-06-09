@@ -156,11 +156,10 @@ proc flushStderr*() {.noconv, used.} =
 when compileOption"threads":
   import std/rlocks
   var clobber {.global.}: RLock
+  initRLock clobber
 
   template noclobber*(body: untyped) =
     ## serialize access to the body; usually for output reasons
-    once:
-      initRLock clobber
     withRLock clobber:
       body
 else:
