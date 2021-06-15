@@ -398,17 +398,16 @@ proc shouldPass(p: Profile): bool =
   if ci and ballsFailFast:
     # neither cpp or js or nimscript backends are required to work
     if p.cp notin {cpp, js, e}:
-      # arc and orc are still too unreliable to demand successful runs
-      if p.gc notin {arc, orc}:
-        # danger builds can fail; they include experimental features
-        if p.opt notin {danger}:
-          case MajorMinor
-          of "1.4":
-            if p.gc <= orc:
-              result = true
-          of "1.2":
-            if p.gc <= arc:
-              result = true
+      # danger builds can fail; they include experimental features
+      if p.opt notin {danger}:
+        result = true
+        case MajorMinor
+        of "1.4", "1.3", "1.2", "1.1", "1.0":
+          # arc/orc have fatal bugs on 1.4
+          if p.gc >= arc:
+            result = false
+        else:
+          discard
 
 var cores = corePhore()
 
