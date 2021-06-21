@@ -18,6 +18,12 @@ when defined(js):
     exitCode = max(exitCode, cint q)
   # this will be available only in javascript
   export processExit
+elif defined(nimscript):
+  # nimscript's implementation
+  proc setBallsResult(q: int) =
+    programResult = max(programResult, q)
+  proc addExitProc(p: proc() {.noconv.}) = addQuitProc p
+  export addExitProc
 else:
   when (NimMajor, NimMinor) >= (1, 3):
     # this is our ideal
@@ -150,7 +156,7 @@ proc dollar*(n: NimNode): NimNode =
 
 proc flushStderr*() {.noconv, used.} =
   ## Convenience for flushing stderr during process exit.
-  when not defined(js):
+  when not defined(js) and not defined(nimscript):
     flushFile stderr
 
 when compileOption"threads":
