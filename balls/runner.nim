@@ -340,9 +340,11 @@ proc options(p: Profile): seq[string] =
     # add --define:nodejs on js backend so that getCurrentDir() works
     result.add "--define:nodejs"
 
-  # don't run compile-only tests
-  if "--compileOnly" notin result:
-    result.add "--run"
+  # nimscript doesn't use a --run
+  if p.cp != e:
+    # don't run compile-only tests
+    if "--compileOnly" notin result:
+      result.add "--run"
 
   # turn off sinkInference on 1.2 builds because it breaks VM code
   when (NimMajor, NimMinor) == (1, 2):
