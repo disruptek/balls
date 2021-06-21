@@ -228,7 +228,6 @@ when (NimMajor, NimMinor) >= (1, 2):
   # produce some extra warnings and test future defaults
   when (NimMajor, NimMinor) >= (1, 5):
     opt[danger].add "--panics:on"
-    opt[danger].add "--exceptions:goto"
     opt[danger].add "--experimental:strictFuncs"
     when false:
       #
@@ -349,6 +348,11 @@ proc options(p: Profile): seq[string] =
   # turn off sinkInference on 1.2 builds because it breaks VM code
   when (NimMajor, NimMinor) == (1, 2):
     result.add "--sinkInference:off"
+
+  when (NimMajor, NimMinor) >= (1, 5):
+    # use goto exceptions only in c
+    if p.cp == c:
+      result.add "--exceptions:goto"
 
 func nonsensical(p: Profile): bool =
   ## certain profiles need not be attempted
