@@ -37,7 +37,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          path: balls
+          path: ci
 
       - name: Setup Nim
         uses: alaviss/setup-nim@0.1.1
@@ -48,7 +48,7 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          cd balls
+          cd ci
           #nimble --accept develop
           #nimble --accept build
           nimble --accept install
@@ -58,7 +58,7 @@ jobs:
         if: ${{ matrix.docs }} == 'true'
         shell: bash
         run: |
-          cd balls
+          cd ci
           branch=${{ github.ref }}
           branch=${branch##*/}
           nimble doc --project --path="." --outdir:docs \
@@ -75,6 +75,6 @@ jobs:
           matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
         uses: crazy-max/ghaction-github-pages@v1
         with:
-          build_dir: balls/docs
+          build_dir: ci/docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
