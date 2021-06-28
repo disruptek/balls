@@ -244,7 +244,16 @@ proc revealSymbol(n: NimNode): NimNode =
     #inst = getTypeInst n        # suspects
 
   case n.symKind
-  of nskVar, nskLet, nskParam:
+  of nskEnumField:
+    result = reveal.newCall:
+      bindSym"&".nestList:
+        # checkpoint kind: enum = FooValue
+        newStmtList: [
+          niceKind n,
+          newLit" = ",
+          newLit repr(n),
+        ]
+  of nskVar, nskLet, nskParam, nskForVar, nskResult, nskConst:
     let typ = getType n
     result = reveal.newCall:
       bindSym"&".nestList:
