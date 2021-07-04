@@ -289,13 +289,13 @@ proc cache(p: Profile): string =
   result = getTempDir()
   result = result / "balls-nimcache-$#-$#" % [ suffix, $getCurrentProcessId() ]
 
-proc attempt(cmd: string): int =
+proc attempt(cmd: string; display = false): int =
   ## attempt execution of a random command; returns the exit code
   try:
     when compileOption"threads":
       var output: string
       (output, result) = execCmdEx cmd
-      if result != 0:
+      if result != 0 or display:
         noclobber:
           checkpoint "$ " & cmd
           checkpoint output
@@ -388,7 +388,9 @@ proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
   assert not p.nonsensical
   result =
-    case attempt p.run(withHints = true)
+    # we'll display danger output when run locally
+    case attempt(p.run(withHints = true),
+                 display = false) # p.opt == danger and not ci)
     of 0: Pass
     else: Fail
 
