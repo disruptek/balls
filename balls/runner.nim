@@ -80,10 +80,6 @@ proc shortPath(fn: string): string =
 proc `$`(p: Profile): string =
   "$#: $# $# $#" % [ short p.fn, $p.cp, $p.gc, $p.opt ]
 
-proc corePhore(): Semaphore =
-  ## produce a semaphore according to the number of available cores
-  result.init countProcessors()
-
 template cmper(f: untyped) {.dirty.} =
   result = system.cmp(a.`f`, b.`f`)
   if result != 0:
@@ -415,7 +411,8 @@ proc shouldPass(p: Profile): bool =
         else:
           discard
 
-var cores = corePhore()
+var cores: Semaphore
+cores.init countProcessors()
 
 proc performThreaded(p: Payload) {.thread.} =
   ## run perform, but do it in a thread with a lock on the compilation cache
