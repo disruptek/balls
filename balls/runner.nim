@@ -14,7 +14,7 @@ when not compileOption"threads":
 import std/rlocks
 
 import ups/sanitize
-import semaphores
+import sync/semaphore
 
 import balls/spec
 import balls/style
@@ -82,9 +82,7 @@ proc `$`(p: Profile): string =
 
 proc corePhore(): Semaphore =
   ## produce a semaphore according to the number of available cores
-  result.init 314
-  for core in 1 .. countProcessors():
-    signal result
+  result.init countProcessors()
 
 template cmper(f: untyped) {.dirty.} =
   result = system.cmp(a.`f`, b.`f`)

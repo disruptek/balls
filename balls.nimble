@@ -1,4 +1,4 @@
-version = "3.3.7"
+version = "3.4.0"
 author = "disruptek"
 description = "a unittest framework with balls 🔴🟡🟢"
 license = "MIT"
@@ -6,7 +6,8 @@ license = "MIT"
 # requires newTreeFrom
 requires "https://github.com/disruptek/grok >= 0.5.0 & < 1.0.0"
 requires "https://github.com/disruptek/ups < 1.0.0"
-requires "https://github.com/disruptek/semaphores >= 0.0.4 & < 1.0.0"
+requires "https://github.com/planetis-m/sync >= 1.0.0 & < 2.0.0"
+#requires "https://github.com/c-blake/cligen < 2.0.0"
 
 bin = @["balls"]            # build the binary for basic test running
 installExt = @["nim"]       # we need to install balls.nim also
