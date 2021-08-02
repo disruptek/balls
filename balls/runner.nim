@@ -396,20 +396,18 @@ proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
 proc shouldPass(p: Profile): bool =
   ## true if the test should pass according to current nim climate
   const MajorMinor = $NimMajor & "." & $NimMinor
-  # don't quit when run locally; just keep chugging away
-  if ci and ballsFailFast:
-    # neither cpp or js or nimscript backends are required to work
-    if p.cp notin {cpp, js, e}:
-      # danger builds can fail; they include experimental features
-      if p.opt notin {danger}:
-        result = true
-        case MajorMinor
-        of "1.4", "1.3", "1.2", "1.1", "1.0":
-          # arc/orc have fatal bugs on 1.4
-          if p.gc >= arc:
-            result = false
-        else:
-          discard
+  # neither cpp or js or nimscript backends are required to work
+  if p.cp notin {cpp, js, e}:
+    # danger builds can fail; they include experimental features
+    if p.opt notin {danger}:
+      result = true
+      case MajorMinor
+      of "1.4", "1.3", "1.2", "1.1", "1.0":
+        # arc/orc have fatal bugs on 1.4
+        if p.gc >= arc:
+          result = false
+      else:
+        discard
 
 var cores: Semaphore
 cores.init countProcessors()
@@ -437,9 +435,13 @@ proc performThreaded(p: Payload) {.thread.} =
       discard
     else:
       if p.profile.shouldPass:
-        # if we should crash, go ahead and raise
-        raise CatchableError.newException:
-          "failure: " & $p.profile & "\n" & p.profile.run
+        let message = "failure: " & $p.profile & "\n" & p.profile.run
+        when ballsFailFast:
+          # if we should crash, go ahead and raise
+          raise CatchableError.newException message
+        else:
+          # or just emit an error message
+          checkpoint message
 
 proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
   ## true if a lesser test already failed, meaning we can
