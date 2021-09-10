@@ -195,6 +195,13 @@ macro report(n: string) =
 proc report(n: NimNode): NimNode =
   result = getAst(report n)
 
+when defined(nimLazySemcheck):
+  # for https://github.com/nim-lang/Nim/pull/18818, with -d:nimCompilerDebug
+  # the problem is that otherwise, `macro report*(ss: varargs[typed])` below
+  # causes an ambiguity, giving: `Error: ambiguous symbol in 'getAst' context: report n`
+  block:
+    type _ = typeof(report)
+
 proc niceKind(n: NimNode): NimNode =
   expectKind(n, nnkSym)
   let kind = $n.symKind
