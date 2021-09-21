@@ -68,13 +68,22 @@ import balls
 
 suite "suite balls":
 
+  setup:
+    discard "setup blocks work like you expect"
+
   block goats:
     ## this is a test of goats
     discard
 
+  setup:
+    discard "also, you can redefine them whenever"
+
   block pigs:
     ## a test of pigs
     discard
+
+  teardown:
+    discard "teardown works the same way, of course"
 
   var r = 3
 
