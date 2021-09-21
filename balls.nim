@@ -767,6 +767,8 @@ macro suite*(name: string; tests: untyped) =
   ## of `unittests`: `test "my test name": check true`
 
   result = newStmtList()
+  add result: report name
+
   try:
     # windows cmd / powershell color support
     when defined(windows):
