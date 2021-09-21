@@ -35,6 +35,7 @@ allow subsequent tests to get executed, but only outside of `--define:release`.
 
 - With `--define:release`, compiler errors are fatal and output to console.
 - With `--define:ballsDry`, no color or emojis are output.
+- With `--define:ballsNoDump`, no symbol dumps will occur on test failure
 
 ## Test Runner Usage
 
