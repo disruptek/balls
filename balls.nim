@@ -708,6 +708,14 @@ proc makeTest(n: NimNode; name: string): Test =
       bindSym"memory".newAssignment:              # memory =
         bindSym"quiesceMemory".newCall newLit""   # quiesceMemory("")
 
+    # and before you do that, run the setup clause
+    insert result.node, 0:
+      newCall(ident"setup")
+
+    # and remember to tear it down afterwards
+    result.node.add:
+      newCall(ident"teardown")
+
     # wrap all the instrumentation to catch any exceptions
     result.node = wrapExcept result
 
@@ -761,13 +769,27 @@ proc findName(n: NimNode; index: int): string =
   else:
     result = repr(n)
 
+proc scopedTemplate(n: NimNode): bool =
+  ## true if we should redefine the template in a new scope;
+  ## sets the name to match the discovered identifier.
+  const supported = ["setup", "teardown"]
+  if n.kind == nnkCall and n.len == 2:
+    if n[0].kind == nnkIdent:
+      if n[0].strVal in supported:
+        result = true
+
 macro suite*(name: string; tests: untyped) =
   ## Put each test in a `block:` underneath the named suite. You can specify
   ## test names using `##` comment statements, or block syntax like that
   ## of `unittests`: `test "my test name": check true`
+  result = newStmtList report(name)
 
-  result = newStmtList()
-  add result: report name
+  var suite =
+    newStmtList:
+      # the default setup() and teardown()
+      quote:
+        template setup(args: varargs[untyped]): untyped = discard
+        template teardown(args: varargs[untyped]): untyped = discard
 
   try:
     # windows cmd / powershell color support
@@ -778,21 +800,45 @@ macro suite*(name: string; tests: untyped) =
 
     when not defined(js):
       # ensure that we flush stderr on exit
-      add result:
+      add suite:
         bindSym"addExitProc".newCall bindSym"flushStderr"
 
+    var parent = suite
     for index, n in tests.pairs:
-      var test: Test
-      var n = n.rewriteTestBlock
-      if n.kind == nnkCommentStmt:
-        add result: report n           # report comments
+      if scopedTemplate n:
+        # rewriting setup: or teardown: into templates
+        # that replace those of prior scope...
+        let name = n[0]
+        let body = n[1]
+        var child =
+          newBlockStmt:
+            newStmtList:
+              quote:
+                template `name`(): untyped = `body`
+        parent.add child
+        parent = child.last
       else:
-        let name = findName(n, index)  # discover the test name
-        test = makeTest(n, name)       # create the test
-        add result: test.node          # add the test body
+        # rewriting test blocks as per usual...
+        var child = newStmtList()
+        parent.add child
+
+        var test: Test
+        var n = n.rewriteTestBlock
+        if n.kind == nnkCommentStmt:
+          add child: report n            # report comments
+        else:
+          let name = findName(n, index)  # discover the test name
+          test = makeTest(n, name)       # create the test
+          add child: test.node           # add the test body
+
+        parent = child
+
   finally:
-    add result:
+    add suite:
       reportResults()
+    add result:
+      newBlockStmt:
+        suite
 
 macro test*(name: string; body: untyped) =
   ## A compatibility shim for adapting `std/unittest` syntax.
