@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest', 'macos-latest', 'ubuntu-latest']
-        nim: ['devel', 'version-1-4', 'version-1-2', 'version-1-0']
+        nim: ['devel', 'version-1-6', 'version-1-4', 'version-1-2', 'version-1-0']
     name: '${{ matrix.os }} (${{ matrix.nim }})'
     runs-on: ${{ matrix.os }}
     steps:
