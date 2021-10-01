@@ -320,7 +320,7 @@ proc checkOne(condition: NimNode; message: NimNode): NimNode =
   var symbolReport = newStmtList()
 
   # use a filter with a side-effect to populate the list
-  proc showSymbols(n: NimNode): NimNode =
+  proc showSymbols(n: NimNode): NimNode {.used.} =
     if n.kind == nnkSym:
       add symbolReport:
         revealSymbol n

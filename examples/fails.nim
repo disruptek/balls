@@ -47,7 +47,7 @@ suite "suite balls":
   ## this is a nice comment
   type TypesAreNotTests = bool
   ## there's really nothing else to say
-  const VariablesDefinedOutsideBlocksAreNotTests = true
+  const VariablesDefinedOutsideBlocksAreNotTests {.used.} = true
 
   test "a test: block is fine":
     discard
@@ -65,7 +65,7 @@ suite "suite balls":
             raise
 
         block:
-          proc fixed() = doesnt(compile)
+          proc fixed() {.used.} = doesnt(compile)
     else:
       suite "broken stuff":
         block:

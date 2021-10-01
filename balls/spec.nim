@@ -3,7 +3,11 @@ import std/macros
 import std/os
 
 import grok
-import grok/mem  # for quiesceMemory()
+
+when defined(danger):
+  import grok/mem # for quiesceMemory()
+  # zero-cost cause the symbol to be ".used."
+  assert quiesceMemory is proc(message: string): int
 
 # critically, if we ever indicated a failure,
 # don't obscure that failure with a subsequent success

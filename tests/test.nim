@@ -37,7 +37,7 @@ suite "a pretty suite shim":
   ## this is a nice comment
   type TypesAreNotTests = bool
   ## there's really nothing else to say
-  const VariablesDefinedOutsideBlocksAreNotTests = true
+  const VariablesDefinedOutsideBlocksAreNotTests {.used.} = true
 
   test "a test: block is fine":
     discard
@@ -47,7 +47,7 @@ suite "a pretty suite shim":
 
   block omitted:
     skip("i just don't wanna")
-  
+
   block mostOmitted:
     skip "i really just don't wanna":
       {.error: "never got here".}
