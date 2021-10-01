@@ -40,6 +40,12 @@ else:
 # make sure we definitely have this symbol on all backends
 export setBallsResult
 
+const hasPanics* =
+  # panics were introduced in 1.1.1 ...
+  # when (NimMajor, NimMinor, NimPatch) >= (1, 1, 1):
+  # ... but we need to support --useversion:1.0
+  defined(nimPanics)
+
 # working around the Error->Defect change-over
 when (NimMajor, NimMinor) >= (1, 3):
   const hasDefects* = true
