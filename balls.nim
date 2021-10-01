@@ -310,11 +310,6 @@ macro report*(ss: varargs[typed]) =
 
 proc checkOne(condition: NimNode; message: NimNode): NimNode =
   ## generate a simple check statement with optional exception message
-  let assertion =
-    when hasDefects:
-      ident"AssertionDefect"
-    else:
-      ident"AssertionError"
   var message =
     if message.kind == nnkStrLit and message.strVal == "":
       newLit condition.repr
@@ -340,7 +335,11 @@ proc checkOne(condition: NimNode; message: NimNode): NimNode =
   var clause = newStmtList symbolReport
   add clause:
     nnkRaiseStmt.newTree:
-      ident"newException".newCall(assertion, message)
+      nnkObjConstr.newTree [
+        nnkRefTy.newTree(bindSym"FailError"),
+        nnkExprColonExpr.newTree(ident"msg", message),
+      ]
+
   result = newIfStmt (ident"not".newCall condition, clause)
 
 macro check*(body: bool; message: string = "") =
