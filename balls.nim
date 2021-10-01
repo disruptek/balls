@@ -787,8 +787,8 @@ macro suite*(name: string; tests: untyped) =
     newStmtList:
       # the default setup() and teardown()
       quote:
-        template setup(args: varargs[untyped]): untyped = discard
-        template teardown(args: varargs[untyped]): untyped = discard
+        template setup(args: varargs[untyped]): untyped {.used.} = discard
+        template teardown(args: varargs[untyped]): untyped {.used.} = discard
 
   try:
     # windows cmd / powershell color support
