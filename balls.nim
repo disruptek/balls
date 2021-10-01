@@ -326,7 +326,7 @@ proc checkOne(condition: NimNode; message: NimNode): NimNode =
         revealSymbol n
 
   # run the filter to pull out the interesting symbols
-  when not (defined(gcArc) or defined(gcOrc) or defined(ballsNoDump)):
+  when not defined(ballsNoDump):
     discard filter(condition, showSymbols)
 
   # if not condition:
