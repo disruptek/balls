@@ -238,7 +238,7 @@ var defaults = @["""--path=".""""]  # work around early nim behavior
 when compileOption"threads":
   defaults.add "--parallelBuild:1"
 
-if (NimMajor, NimMinor) >= (1, 6):
+if (NimMajor, NimMinor) >= (1, 8):
   # always use IC if it's available
   defaults.add "--incremental:on"
 elif ci:
