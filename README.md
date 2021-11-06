@@ -4,7 +4,6 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/balls?style=flat)](https://github.com/disruptek/balls/releases/latest)
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.0.11%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/disruptek/balls?style=flat)](#license)
-[![buy me a coffee](https://img.shields.io/badge/donate-buy%20me%20a%20coffee-orange.svg)](https://www.buymeacoffee.com/disruptek)
 
 A unittest macro to save the world, or at least your Sunday.
 
