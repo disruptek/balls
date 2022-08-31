@@ -184,7 +184,7 @@ proc matrixTable*(matrix: Matrix): string =
 proc hints*(p: Profile; ci: bool): string =
   ## Compute `--hint` and `--warning` flags as appropriate given Profile
   ## `p`, `ci` status, and compile-time Nim version information.
-  var omit = @["Cc", "Link", "Conf", "Processing", "Exec",
+  var omit = @["Cc", "Link", "Conf", "Processing", "Exec", "Name",
                "XDeclaredButNotUsed"]
   if ci or p.opt notin {danger}:
     # ignore performance warnings outside of local danger builds
