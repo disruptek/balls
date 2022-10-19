@@ -365,7 +365,10 @@ proc run*(p: Profile; withHints = false): string =
     if p.gc == vm:
       "nim $1 $3"
     else:
-      "nim $1 --gc:$2 $3"
+      when (NimMajor, NimMinor) >= (1, 7):
+        "nim $1 --mm:$2 $3"
+      else:
+        "nim $1 --gc:$2 $3"
 
   result = pattern % [$p.cp, $p.gc, join(p.options, " ")]
 
