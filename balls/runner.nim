@@ -234,7 +234,8 @@ var opt = {
 var cp = @[c]
 
 # use the memory option(s) specified on the command-line
-var gc = specifiedMemModels(parameters()).toSet
+let specifiedMM = specifiedMemModels(parameters()).toSet
+var gc = specifiedMM
 
 # and if those are omitted, we'll select a single default
 if gc == {}:
@@ -279,13 +280,14 @@ if ci:
   cp.add cpp                  # add cpp
   cp.add js                   # add js
   cp.add e                    # add nimscript
-  gc.incl refc                # add refc
-  gc.incl markAndSweep        # add markAndSweep
-  if arc in gc:               # add orc if arc is available
-    when (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
-      gc.incl orc
-  if js in cp:
-    gc.incl vm
+  if specifiedMM == {}:       # let the user override CI memory models, also
+    gc.incl refc              # add refc
+    gc.incl markAndSweep      # add markAndSweep
+    if arc in gc:             # add orc if arc is available
+      when (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
+        gc.incl orc
+    if js in cp:
+      gc.incl vm
 else:
   # do a danger build locally so we can check time/space; omit release
   opt.del release
