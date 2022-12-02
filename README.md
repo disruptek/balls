@@ -58,6 +58,12 @@ $ balls --styleCheck:error
 # ... all tests are compiled with --styleCheck:error ...
 ```
 
+You can specify memory models with which to restrict the test matrix:
+```
+$ balls --gc:arc --gc:orc
+# ... tests are run only with --gc:arc and --gc:orc ...
+```
+
 ## Test Library Usage
 
 Here's a set of example tests which will pass (and fail) in interesting ways.
