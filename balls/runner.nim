@@ -1,13 +1,13 @@
-import std/times
+import std/algorithm
+import std/hashes
+import std/heapqueue
 import std/options
-import std/tables
 import std/os
 import std/osproc
-import std/hashes
-import std/algorithm
-import std/strutils
 import std/sequtils
-import std/heapqueue
+import std/strutils
+import std/tables
+import std/times
 
 when not compileOption"threads":
   {.error: "balls currently requires threads".}
@@ -118,6 +118,24 @@ when false:
       p.cp = default Compiler
       result = p in matrix
 
+proc parameters(): seq[string] =
+  ## ladies and gentlemen, the command-line arguments
+  for i in 1..paramCount():
+    result.add paramStr(i)
+
+proc specifiedMemModels(params: openArray[string]): seq[MemModel] =
+  ## return a sequence of memory models found in the provided `params`,
+  ## which are expected to follow the form of command-line arguments
+  let params = map(params, toLowerAscii)
+  for mm in MemModel:
+    for prefix in ["--gc:", "--mm:"]:
+      if (prefix & $mm).toLowerAscii in params:
+        result.add mm
+
+proc toSet[T: int8 | int16 | enum | uint8 | uint16 | char](ss: openArray[T]): set[T] =
+  for item in ss.items:
+    result.incl item
+
 iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
   ## emit the profile permutations appropriate for this row
   var p = p
@@ -214,24 +232,30 @@ var opt = {
   danger: @["--define:danger"],
 }.toTable
 var cp = @[c]
-# the default gc varies with version
-var gc: set[MemModel]
-when (NimMajor, NimMinor) >= (1, 2):
-  gc.incl arc
-  # danger is no longer required to pass, so this is a useful place to
-  # produce some extra warnings and test future defaults
-  when (NimMajor, NimMinor) >= (1, 5):
-    opt[danger].add "--panics:on"
-    opt[danger].add "--experimental:strictFuncs"
-    when false:
-      #
-      # removed because if i cannot make it work, i can hardly expect you to
-      #
-      if ci:
-        # notnil is too slow to run locally
-        opt[danger].add "--experimental:strictNotNil"
-else:
-  gc.incl refc
+
+# use the memory option(s) specified on the command-line
+var gc = specifiedMemModels(parameters()).toSet
+
+# and if those are omitted, we'll select a single default
+if gc == {}:
+  # the default gc varies with version
+  when (NimMajor, NimMinor) >= (1, 2):
+    gc.incl arc
+    # danger is no longer required to pass, so this is a useful place to
+    # produce some extra warnings and test future defaults
+    when (NimMajor, NimMinor) >= (1, 5):
+      opt[danger].add "--panics:on"
+      opt[danger].add "--experimental:strictFuncs"
+      when false:
+        #
+        # removed because if i cannot make it work, i can hardly expect you to
+        #
+        if ci:
+          # notnil is too slow to run locally
+          opt[danger].add "--experimental:strictNotNil"
+  else:
+    gc.incl refc
+
 # options common to all profiles
 var defaults = @["""--path=".""""]  # work around early nim behavior
 
@@ -307,9 +331,15 @@ proc checkpoint(matrix: Matrix) =
 proc options(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
 
-  # add in any command-line arguments
-  for index in 1 .. paramCount():
-    result.add paramStr(index)
+  # filter out any memory model options from the command-line arguments
+  var params = parameters()
+  for prefix in ["--gc:", "--mm:"]:
+    params =
+      params.filterIt:
+        it.toLowerAscii != (prefix & $p.gc).toLowerAscii
+
+  # and otherwise pass those options on to the compiler
+  result.add params
 
   # specify the nimcache directory
   result.add "--nimCache:" & p.cache
@@ -359,7 +389,7 @@ func nonsensical(p: Profile): bool =
   else:
     false
 
-proc run*(p: Profile; withHints = false): string =
+proc commandLine*(p: Profile; withHints = false): string =
   ## compose the interesting parts of the compiler invocation
   let pattern =
     if p.gc == vm:
@@ -386,7 +416,7 @@ proc perform*(p: Profile): StatusKind =
   assert not p.nonsensical
   result =
     # we'll display danger output when run locally
-    case attempt(p.run(withHints = true),
+    case attempt(p.commandLine(withHints = true),
                  display = false) # p.opt == danger and not ci)
     of 0: Pass
     else: Fail
@@ -438,7 +468,7 @@ proc performThreaded(p: Payload) {.thread.} =
       discard
     else:
       if p.profile.shouldPass:
-        let message = "failure: " & $p.profile & "\n" & p.profile.run
+        let message = "failure: " & $p.profile & "\n" & p.profile.commandLine
         when ballsFailFast:
           # if we should crash, go ahead and raise
           raise CatchableError.newException message
@@ -515,7 +545,7 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
 
   for p in matrix.keys:
     if matrix[p] > Part and p.shouldPass:
-      checkpoint p.run
+      checkpoint p.commandLine
       setBallsResult int(matrix[p] > Part)
       # before we fail the ci, run a debug test for shits and grins
       var n = p
