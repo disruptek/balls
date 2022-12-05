@@ -79,15 +79,15 @@ when ballsDry:
   type
     StatusKind* = enum      ## possible test results
       None = " "      ## (undefined)
-      Info = "⊚"      ## may prefix information
-      Wait = "⏲"      ## pending cache access
-      Runs = "🮲"      ## currently runs
-      Pass = "●"      ## total success
-      Skip = "⸮"      ## test was skipped
-      Part = "◐"      ## partial success
-      Fail = "○"      ## assertion failure
-      Died = "✷"      ## unexpected exception
-      Oops = "⊖"      ## compiles() failed
+      Info = "#"      ## may prefix information
+      Wait = "."      ## pending cache access
+      Runs = "?"      ## currently runs
+      Pass = "+"      ## total success
+      Skip = "$"      ## test was skipped
+      Part = "/"      ## partial success
+      Fail = "-"      ## assertion failure
+      Died = "*"      ## unexpected exception
+      Oops = "!"      ## compiles() failed
 
 else:
   const
