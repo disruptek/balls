@@ -45,12 +45,12 @@ type
     vm
 
   Analyzer* = enum  ## analysis tools
-    Execution
-    ASanitizer
-    TSanitizer
-    Valgrind
-    Helgrind
-    DataRacer
+    Execution  = "execute"
+    ASanitizer = "asan"
+    TSanitizer = "tsan"
+    Valgrind   = "memcheck"
+    Helgrind   = "helgrind"
+    DataRacer  = "drd"
 
   Matrix* = OrderedTable[Profile, StatusKind] ##
   ## the Matrix collects test results in the order they are obtained
@@ -69,6 +69,10 @@ type
     status: ptr StatusKind         # ptr is necessary for non-arc nims
 
   TestThread = Thread[Payload]
+
+const
+  anCompilerInvocation* = {Execution, ASanitizer, TSanitizer}
+  anValgrindInvocation* = {Valgrind, Helgrind, DataRacer}
 
 proc hash*(p: Profile): Hash =
   ## Two Profiles that `hash` identically share a test result in the Matrix.
@@ -121,36 +125,40 @@ proc contains*(matrix: Matrix; p: Profile): bool =
 proc nearby(p: Profile): (string, int, int, int) =
   result = (p.fn.shortPath, ord p.be, ord p.opt, ord p.an)
 
-when false:
-  proc useEarlyRow(matrix: Matrix; p: Profile): bool =
-    if p.be in {js, e}:
-      var p = p
-      p.gc = default MemModel
-      p.be = default Backend
-      result = p in matrix
-
-proc parameters(): seq[string] =
+proc parameters*(): seq[string] =
   ## ladies and gentlemen, the command-line arguments
   for i in 1..paramCount():
     result.add paramStr(i)
 
+proc parameter*(parameters: seq[string]; switch: string): bool =
+  ## true if the command-line switch is present in the arguments;
+  ## this necessarily performs a style-insensitive comparison
+  parameters.anyIt:
+    0 == cmpIgnoreStyle(it, switch)
+
+proc parameter*(switch: string): bool =
+  ## true if the command-line switch is present in the command-line arguments;
+  ## this necessarily performs a style-insensitive comparison
+  parameter(parameters(), switch)
+
 template makeSpecifier(tipe: typedesc[enum]; prefixes: openArray[string]): untyped =
   ## makes filters which sus out specified values corresponding to compiler
   ## options relevant to our matrix of test profiles, as provided via cli.
-  proc `specified tipe`(params: openArray[string]): seq[tipe] {.used.} =
+  proc `specified tipe`*(params: openArray[string]): seq[tipe] {.used.} =
     let params = map(params, toLowerAscii)
     for value in tipe:
       for prefix in prefixes.items:
         if (prefix & $value).toLowerAscii in params:
           result.add value
 
-  proc `filtered tipe`(params: openArray[string]): seq[string] {.used.} =
-    var params = map(params, toLowerAscii)
+  proc `filtered tipe`*(params: seq[string]): seq[string] {.used.} =
+    var params = params
     for value in tipe:
       for prefix in prefixes:
         params =
           params.filterIt:
             it.toLowerAscii != (prefix & $value).toLowerAscii
+    result = params
 
 makeSpecifier(MemModel, ["--gc:", "--mm:"])
 makeSpecifier(Backend, ["-b:", "--backend:"])
@@ -199,7 +207,12 @@ proc matrixTable*(matrix: Matrix): string =
     var p = profiles[0]
 
     # compose a row's prefix labels in a lame way
-    var row = @[p.fn.shortPath, $p.be, $p.opt]
+    var row =
+      case p.an
+      of Execution:
+        @[p.fn.shortPath, $p.be, $p.opt]
+      else:
+        @[p.fn.shortPath, $p.be, $p.an]
 
     # then iterate over the memory models and consume any results
     for p in rowPermutations(matrix, p):
@@ -246,10 +259,10 @@ proc hints*(p: Profile; ci: bool): string =
   for warning in omit.items:
     result.add " --warning[$#]=off" % [ warning ]
 
-let ci = getEnv("GITHUB_ACTIONS", "false") == "true"
-var matrix: Matrix
+let ci* = getEnv("GITHUB_ACTIONS", "false") == "true"
+var matrix*: Matrix
 # set some default matrix members (profiles)
-var opt = {
+var opt* = {
   debug: @["--debuginfo", "--stackTrace:on", "--excessiveStackTrace:on"],
   release: @["--define:release", "--stackTrace:on",
              "--excessiveStackTrace:on"],
@@ -257,7 +270,7 @@ var opt = {
 }.toTable
 
 # use the backends specified on the command-line
-var be = specifiedBackend(parameters()).toSet
+var be* = specifiedBackend(parameters()).toSet
 # and if those are omitted, we'll select sensible defaults
 if be == {}:
   be.incl c                     # always test c
@@ -275,6 +288,7 @@ if specifiedOpt == {}:
   else:
     # or do a danger build locally so we can check time/space; omit release
     opt.del release
+    opt.del debug
 else:
   # if optimizations were specified, remove any (not) specified
   let removeOpts = toSeq(Optimizer.items).toSet - specifiedOpt
@@ -283,7 +297,7 @@ else:
 
 # use the memory models specified on the command-line
 let specifiedMM = specifiedMemModel(parameters()).toSet
-var gc = specifiedMM
+var gc* = specifiedMM
 # and if those are omitted, we'll select a single default
 if gc == {}:
   # the default gc varies with version
@@ -313,7 +327,7 @@ if gc == {}:
       gc.incl vm              # on ci, add vm if js is specified
 
 # options common to all profiles
-var defaults = @["""--path=".""""]  # work around early nim behavior
+var defaults* = @["""--path=".""""]  # work around early nim behavior
 
 when compileOption"threads":
   defaults.add "--parallelBuild:1"
@@ -330,24 +344,23 @@ elif ci:
     # force incremental off so as not to get confused by a config file
     defaults.add "--incremental:off"
 
-proc cache(p: Profile): string =
+proc cache*(p: Profile): string =
   ## come up with a unique cache directory according to where you'd like
   ## to thread your compilations under ci or local environments.
   ## the thinking here is that local tests vary by filename while the ci
   ## tests vary primarily by garbage collector.
-  when compileOption"threads":
-    var suffix =
-      if ci:
-        "$#.$#.$#" % [ $p.be, $p.opt, $p.gc ]
-      else:
-        "$#.$#.$#" % [ $hash(p.fn), $p.be, $p.opt ]
-  else:
-    var suffix = $p.be  # no threads; use a unique cache for each backend
-
+  let opt =
+    case p.an
+    of ASanitizer, TSanitizer:
+      $p.an
+    else:
+      $p.opt
+  let suffix =
+    "$#.$#.$#.$#" % [ $hash(p.fn), $p.be, opt, $p.gc ]
   result = getTempDir()
   result = result / "balls-nimcache-$#-$#" % [ suffix, $getCurrentProcessId() ]
 
-proc attempt(cmd: string; display = false): int =
+proc attempt*(cmd: string; display = false): int =
   ## attempt execution of a random command; returns the exit code
   try:
     when compileOption"threads":
@@ -364,11 +377,18 @@ proc attempt(cmd: string; display = false): int =
     checkpoint "$1: $2" % [ $e.name, e.msg ]
     result = 1
 
-proc checkpoint(matrix: Matrix) =
+proc checkpoint*(matrix: Matrix) =
   checkpoint:
     "\n" & matrixTable(matrix) & "\n"
 
-proc options(p: Profile): seq[string] =
+proc output*(p: Profile): string =
+  ## return the output filename for the build
+  when compileOption"threads":
+    "$#_$#_$#" % [ short(p.fn), $getThreadId(), $hash(p) ]
+  else:
+    "$#_$#" % [ short(p.fn), $hash(p) ]
+
+proc options*(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
 
   # grab the user's overrides provided on the command-line
@@ -385,13 +405,8 @@ proc options(p: Profile): seq[string] =
   # specify the nimcache directory
   result.add "--nimCache:" & p.cache
 
-  # use an unlikely filename for output
-  let output =
-    when compileOption"threads":
-      "$#_$#_$#" % [ short(p.fn), $getThreadId(), $hash(p) ]
-    else:
-      "$#_$#" % [ short(p.fn), $hash(p) ]
-  result.add "--out:\"$#\"" % [ output ]
+  # specify the output filename
+  result.add "--out:\"$#\"" % [ p.output ]
 
   # use the nimcache for our output directory
   result.add "--outdir:\"$#\"" % [ p.cache ]   # early nims dunno $nimcache
@@ -404,11 +419,12 @@ proc options(p: Profile): seq[string] =
     # add --define:nodejs on js backend so that getCurrentDir() works
     result.add "--define:nodejs"
 
-  # nimscript doesn't use a --run
-  if p.be != e:
-    # don't run compile-only tests
-    if "--compileOnly" notin result:
-      result.add "--run"
+  when false:
+    # nimscript doesn't use a --run
+    if p.be != e:
+      # don't run compile-only tests
+      if not result.parameter "--compileOnly":
+        result.add "--run"
 
   # turn off sinkInference on 1.2 builds because it breaks VM code
   when (NimMajor, NimMinor) == (1, 2):
@@ -419,7 +435,26 @@ proc options(p: Profile): seq[string] =
     if p.be == c:
       result.add "--exceptions:goto"
 
-func nonsensical(p: Profile): bool =
+  template installDebugInfo {.dirty.} =
+    for switch in ["--debuginfo", "--debugger:native"]:
+      if switch notin result:
+        result.add switch
+
+  case p.an
+  of ASanitizer:
+    result.add """--passC:"-fsanitize=address""""
+    result.add """--passL:"-fsanitize=address""""
+    installDebugInfo()
+  of TSanitizer:
+    result.add """--passC:"-fsanitize=thread""""
+    result.add """--passL:"-fsanitize=thread""""
+    installDebugInfo()
+  else:
+    discard
+
+let hasValgrind = "" != findExe"valgrind"
+
+proc nonsensical*(p: Profile): bool =
   ## certain profiles need not be attempted
   if p.gc == vm and p.be notin {js, e}:
     true
@@ -427,10 +462,16 @@ func nonsensical(p: Profile): bool =
     true
   elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
     true
+  elif p.an in anValgrindInvocation and not hasValgrind:
+    true
+  elif p.gc == vm and p.an in anValgrindInvocation:
+    true
+  elif p.an != Execution and p.opt != danger:
+    true
   else:
     false
 
-proc commandLine*(p: Profile; withHints = false): string =
+iterator compilerCommandLine(p: Profile; withHints = false): string =
   ## compose the interesting parts of the compiler invocation
   let pattern =
     if p.gc == vm:
@@ -440,34 +481,85 @@ proc commandLine*(p: Profile; withHints = false): string =
         "nim $1 --mm:$2 $3"
       else:
         "nim $1 --gc:$2 $3"
-
-  result = pattern % [$p.be, $p.gc, join(p.options, " ")]
-
+  var result = pattern % [$p.be, $p.gc, join(p.options, " ")]
   if withHints:
     # determine which hints to include
     let hs = hints(p, ci)
     # add the hints into the invocation ahead of the filename
     result &= " " & hs
-
   # return the command-line with the filename for c+p reasons
   result &= " " & p.fn
+  # yield the compilation command
+  yield result
+
+  if not p.options.parameter("--compileOnly"):
+    # invoke the output
+    case p.be
+    of js:
+      yield "node " & (p.cache / p.output)
+    of e:
+      yield "nim e " & p.fn
+    else:
+      yield p.cache / p.output
+
+iterator valgrindCommandLine(p: Profile; withHints = false): string =
+  ## compose the interesting parts of the valgrind invocation
+  block:
+    # make sure the executable has been built successfully
+    var compilation = p
+    compilation.an = Execution
+    for compilation in compilation.compilerCommandLine(withHints = withHints):
+      yield compilation
+      # omit any execution from the "compiler" commandLine iterator
+      break
+
+  var result = @["valgrind"]
+  result.add: "--error-exitcode=255"  # for zevv
+  result.add: "--tool=" & (if p.an == DataRacer: "drd" else: $p.an)
+  case p.an
+  of Valgrind:
+    result.add: ["--leak-check=full", "--show-leak-kinds=all"]
+    result.add: ["--track-origins=yes", "--max-threads=50000"]
+  of Helgrind:
+    discard
+  of DataRacer:
+    result.add: ["--first-race-only=yes", "--join-list-vol=50000"]
+    result.add: ["--report-signal-unlocked=no"]
+  else:
+    discard
+  result.add: p.cache / p.output
+  yield join(result, " ")
+
+iterator commandLine*(p: Profile; withHints = false): string =
+  ## compose the interesting parts of the process invocations
+  case p.an
+  of anCompilerInvocation:
+    for command in p.compilerCommandLine(withHints = withHints):
+      yield command
+  of anValgrindInvocation:
+    for command in p.compilerCommandLine(withHints = withHints):
+      yield command
+    for command in p.valgrindCommandLine(withHints = withHints):
+      yield command
 
 proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
   assert not p.nonsensical
-  result =
-    # we'll display danger output when run locally
-    case attempt(p.commandLine(withHints = true),
-                 display = false) # p.opt == danger and not ci)
-    of 0: Pass
-    else: Fail
+  for command in p.commandLine(withHints = true):
+    result =
+      # NOTE: `display = p.opt == danger and not ci` was too spammy
+      case attempt(command, display = p.opt == danger and not ci)
+      of 0: Pass
+      else: Fail
+    if result == Fail:
+      break
 
-proc `[]=`(matrix: var Matrix; p: Profile; s: StatusKind) =
+proc `[]=`*(matrix: var Matrix; p: Profile; s: StatusKind) =
   ## emit the matrix report whenever it changes
   tables.`[]=`(matrix, p, s)
   checkpoint matrix
 
-proc shouldPass(p: Profile): bool =
+proc shouldPass*(p: Profile): bool =
   ## true if the test should pass according to current nim climate
   const MajorMinor = $NimMajor & "." & $NimMinor
   # neither cpp or js or nimscript backends are required to work
@@ -529,6 +621,7 @@ proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
           else:
             return true
 
+  dominated(Analyzer, an)
   dominated(Optimizer, opt)
   #dominated(Backend, b)
   dominated(MemModel, gc)
@@ -584,7 +677,8 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
 
   for p in matrix.keys:
     if matrix[p] > Part and p.shouldPass:
-      checkpoint p.commandLine
+      for command in p.commandLine:
+        checkpoint command
       setBallsResult int(matrix[p] > Part)
       # before we fail the ci, run a debug test for shits and grins
       var n = p
@@ -603,11 +697,16 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
 
 proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
+  var profile: Profile
+  profile.fn = fn
   for opt in opt.keys:
-    if not ci or opt > debug:         # omit debug on ci
-      for gc in gc.items:
-        for be in be.items:
-          var profile = Profile(fn: fn, gc: gc, be: be, opt: opt)
+    profile.opt = opt
+    for gc in gc.items:
+      profile.gc = gc
+      for be in be.items:
+        profile.be = be
+        for an in Analyzer.items:
+          profile.an = an
           if not profile.nonsensical:
             result.add profile
 
