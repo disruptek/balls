@@ -118,7 +118,7 @@ proc contains*(matrix: Matrix; p: Profile): bool =
   ## present in the test `matrix`.
   matrix.getOrDefault(p, None) notin {None}
 
-proc nearby(p: Profile): (string, int, int) =
+proc nearby(p: Profile): (string, int, int, int) =
   result = (p.fn.shortPath, ord p.be, ord p.opt, ord p.an)
 
 when false:
