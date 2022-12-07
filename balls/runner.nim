@@ -466,7 +466,11 @@ proc nonsensical*(p: Profile): bool =
     true
   elif p.gc == vm and p.an in anValgrindInvocation:
     true
-  elif p.an != Execution and p.opt != danger:
+  elif p.an != Execution and p.opt notin {danger}:
+    true
+  elif p.an != Execution and p.gc notin {arc, orc}:
+    true
+  elif p.an != Execution and (NimMajor, NimMinor) < (1, 6):
     true
   else:
     false
