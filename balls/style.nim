@@ -77,7 +77,7 @@ let colorThisRun: bool =
   when defined(js):
     onCI
   else:
-    onCI or stderr.isAtty
+    onCI or stdmsg().isAtty
 
 proc useColor*(): bool =
   ## for the bland folks; they live among us!
