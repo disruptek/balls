@@ -504,14 +504,16 @@ iterator compilerCommandLine(p: Profile; withHints = false): string =
 
 iterator valgrindCommandLine(p: Profile; withHints = false): string =
   ## compose the interesting parts of the valgrind invocation
-  block:
-    # make sure the executable has been built successfully
-    var compilation = p
-    compilation.an = Execution
-    for compilation in compilation.compilerCommandLine(withHints = withHints):
-      yield compilation
-      # omit any execution from the "compiler" commandLine iterator
-      break
+  let executable =
+    block:
+      # make sure the executable has been built successfully
+      var compilation = p
+      compilation.an = Execution
+      for compilation in compilation.compilerCommandLine(withHints = withHints):
+        yield compilation
+        # omit any execution from the "compiler" commandLine iterator
+        break
+      compilation.cache / compilation.output
 
   var result = @["valgrind"]
   result.add: "--error-exitcode=255"  # for zevv
@@ -521,13 +523,13 @@ iterator valgrindCommandLine(p: Profile; withHints = false): string =
     result.add: ["--leak-check=full", "--show-leak-kinds=all"]
     result.add: ["--track-origins=yes", "--max-threads=50000"]
   of Helgrind:
-    discard
+    result.add: ["--max-threads=50000"]
   of DataRacer:
     result.add: ["--first-race-only=yes", "--join-list-vol=50000"]
     result.add: ["--report-signal-unlocked=no"]
   else:
     discard
-  result.add: p.cache / p.output
+  result.add: executable
   yield join(result, " ")
 
 iterator commandLine*(p: Profile; withHints = false): string =
