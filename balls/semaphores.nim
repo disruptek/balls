@@ -1,4 +1,3 @@
-import std/genasts
 import std/hashes
 import std/locks
 
@@ -78,23 +77,6 @@ proc dec*(s: var Semaphore) =
   ## blocking adhoc adjustment of the semaphore
   withLock s.lock:
     dec s.count
-
-macro withLockedSemaphore*(s: var Semaphore; logic: typed): untyped =
-  ## block until `s` is available,
-  ## consume it, and
-  ## run `logic` while holding the lock
-  genAstOpt({}, s, logic):
-    while true:
-      acquire s.lock
-      if s.count > 0:
-        try:
-          dec s.count
-          logic
-          break
-        finally:
-          release s.lock
-      wait(s.cond, s.lock)
-      release s.lock
 
 template withSemaphore*(s: var Semaphore; logic: typed): untyped =
   ## wait for the semaphore `s`, run the `logic`, and signal it
