@@ -158,12 +158,12 @@ proc numberLines(s: string; first = 1): NimNode =
     result.add ln
 
 proc checkpoint*(ss: varargs[string, `$`]) =
-  ## Like `echo`, but outputs to `stderr` with the other test output.
+  ## Like `echo`, but outputs to `stdmsg()` with the other test output.
   noclobber:
     when defined(js):
       echo ss.join(" ")
     else:
-      writeLine(stderr, ss.join(" "))
+      stdmsg().writeLine ss.join(" ")
 
 proc output(n: NimNode): NimNode =
   assert not n.isNil
@@ -798,9 +798,9 @@ macro suite*(name: string; tests: untyped) =
           bindSym"execShellCmd".newCall newLit""
 
     when not defined(js):
-      # ensure that we flush stderr on exit
+      # ensure that we flush streams on exit
       add suite:
-        bindSym"addExitProc".newCall bindSym"flushStderr"
+        bindSym"addExitProc".newCall bindSym"flushStreams"
 
     var parent = suite
     for index, n in tests.pairs:

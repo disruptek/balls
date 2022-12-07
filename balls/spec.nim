@@ -164,10 +164,10 @@ proc dollar*(n: NimNode): NimNode =
     bindSym"$"
     n
 
-proc flushStderr*() {.noconv, used.} =
-  ## Convenience for flushing stderr during process exit.
+proc flushStreams*() {.noconv, used.} =
+  ## Convenience for flushing `stdmsg()` during process exit.
   when not defined(js) and not defined(nimscript):
-    flushFile stderr
+    flushFile stdmsg()
 
 when compileOption"threads":
   import std/rlocks
