@@ -73,7 +73,7 @@ when defined(danger): # avoid unused warnings
 
 {.pop.}
 
-let colorThisRun: bool =
+let colorThisRun {.used.}: bool =
   when defined(js):
     onCI
   else:
