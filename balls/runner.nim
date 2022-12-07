@@ -26,7 +26,7 @@ const
   ## if true, quit early on a test failure
 
 type
-  Compiler* = enum  ## backends that we test
+  Backend* = enum  ## backends that we test
     c
     cpp
     js
@@ -44,12 +44,21 @@ type
     orc
     vm
 
+  Analyzer* = enum  ## analysis tools
+    Execution
+    ASanitizer
+    TSanitizer
+    Valgrind
+    Helgrind
+    DataRacer
+
   Matrix* = OrderedTable[Profile, StatusKind] ##
   ## the Matrix collects test results in the order they are obtained
 
   Profile* = object ##
   ## the Profile defines compilation settings for a single test invocation
-    cp*: Compiler
+    an*: Analyzer
+    be*: Backend
     opt*: Optimizer
     gc*: MemModel
     fn*: string
@@ -64,7 +73,8 @@ type
 proc hash*(p: Profile): Hash =
   ## Two Profiles that `hash` identically share a test result in the Matrix.
   var h: Hash = 0
-  h = h !& hash(p.cp)
+  h = h !& hash(p.an)
+  h = h !& hash(p.be)
   h = h !& hash(p.opt)
   h = h !& hash(p.gc)
   h = h !& hash(p.fn)
@@ -78,7 +88,7 @@ proc shortPath(fn: string): string =
   fn.parentDir.lastPathPart / fn.short
 
 proc `$`(p: Profile): string =
-  "$#: $# $# $#" % [ short p.fn, $p.cp, $p.gc, $p.opt ]
+  "$#: $# $# $#" % [ short p.fn, $p.be, $p.gc, $p.opt ]
 
 template cmper(f: untyped) {.dirty.} =
   result = system.cmp(a.`f`, b.`f`)
@@ -88,9 +98,10 @@ template cmper(f: untyped) {.dirty.} =
 proc cmp*(a, b: Profile): int =
   ## Compare Profiles `a`, `b` for the purposes of test ordering.
   ## Note that this comparison does not measure test filename.
-  cmper cp
+  cmper be
   cmper gc
   cmper opt
+  cmper an
 
 proc `<`*(a, b: Profile): bool {.used.} =
   ## Compare Profiles `a`, `b` for the purposes of test ordering.
@@ -108,14 +119,14 @@ proc contains*(matrix: Matrix; p: Profile): bool =
   matrix.getOrDefault(p, None) notin {None}
 
 proc nearby(p: Profile): (string, int, int) =
-  result = (p.fn.shortPath, ord p.cp, ord p.opt)
+  result = (p.fn.shortPath, ord p.be, ord p.opt, ord p.an)
 
 when false:
   proc useEarlyRow(matrix: Matrix; p: Profile): bool =
-    if p.cp in {js, e}:
+    if p.be in {js, e}:
       var p = p
       p.gc = default MemModel
-      p.cp = default Compiler
+      p.be = default Backend
       result = p in matrix
 
 proc parameters(): seq[string] =
@@ -123,14 +134,27 @@ proc parameters(): seq[string] =
   for i in 1..paramCount():
     result.add paramStr(i)
 
-proc specifiedMemModels(params: openArray[string]): seq[MemModel] =
-  ## return a sequence of memory models found in the provided `params`,
-  ## which are expected to follow the form of command-line arguments
-  let params = map(params, toLowerAscii)
-  for mm in MemModel:
-    for prefix in ["--gc:", "--mm:"]:
-      if (prefix & $mm).toLowerAscii in params:
-        result.add mm
+template makeSpecifier(tipe: typedesc[enum]; prefixes: openArray[string]): untyped =
+  ## makes filters which sus out specified values corresponding to compiler
+  ## options relevant to our matrix of test profiles, as provided via cli.
+  proc `specified tipe`(params: openArray[string]): seq[tipe] {.used.} =
+    let params = map(params, toLowerAscii)
+    for value in tipe:
+      for prefix in prefixes.items:
+        if (prefix & $value).toLowerAscii in params:
+          result.add value
+
+  proc `filtered tipe`(params: openArray[string]): seq[string] {.used.} =
+    var params = map(params, toLowerAscii)
+    for value in tipe:
+      for prefix in prefixes:
+        params =
+          params.filterIt:
+            it.toLowerAscii != (prefix & $value).toLowerAscii
+
+makeSpecifier(MemModel, ["--gc:", "--mm:"])
+makeSpecifier(Backend, ["-b:", "--backend:"])
+makeSpecifier(Optimizer, ["-d:", "--define:"])
 
 proc toSet[T: int8 | int16 | enum | uint8 | uint16 | char](ss: openArray[T]): set[T] =
   for item in ss.items:
@@ -142,9 +166,9 @@ iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
   for mm in MemModel:
     p.gc = mm
     if p.gc == vm:
-      p.cp = e
+      p.be = e
     yield p
-  p.cp = js
+  p.be = js
   p.gc = vm
   yield p
 
@@ -152,7 +176,7 @@ proc matrixTable*(matrix: Matrix): string =
   ## Render the `matrix` as a table.
   var matrix = matrix
   var tab = Tabouli()
-  tab.headers = @["nim-" & NimVersion, "cp", "opt"]
+  tab.headers = @["nim-" & NimVersion, "", ""]
   tab.freeze = len tab.headers
   for mm in MemModel:
     tab.headers.add:
@@ -175,7 +199,7 @@ proc matrixTable*(matrix: Matrix): string =
     var p = profiles[0]
 
     # compose a row's prefix labels in a lame way
-    var row = @[p.fn.shortPath, $p.cp, $p.opt]
+    var row = @[p.fn.shortPath, $p.be, $p.opt]
 
     # then iterate over the memory models and consume any results
     for p in rowPermutations(matrix, p):
@@ -231,12 +255,35 @@ var opt = {
              "--excessiveStackTrace:on"],
   danger: @["--define:danger"],
 }.toTable
-var cp = @[c]
 
-# use the memory option(s) specified on the command-line
-let specifiedMM = specifiedMemModels(parameters()).toSet
+# use the backends specified on the command-line
+var be = specifiedBackend(parameters()).toSet
+# and if those are omitted, we'll select sensible defaults
+if be == {}:
+  be.incl c                     # always test c
+  if ci:
+    be.incl cpp                 # on ci, add cpp
+    be.incl js                  # on ci, add js
+    be.incl e                   # on ci, add nimscript
+
+# use the optimizations specified on the command-line
+var specifiedOpt = specifiedOptimizer(parameters()).toSet
+if specifiedOpt == {}:
+  if ci:
+    # no optimizations were specified; omit debug on ci
+    opt.del debug
+  else:
+    # or do a danger build locally so we can check time/space; omit release
+    opt.del release
+else:
+  # if optimizations were specified, remove any (not) specified
+  let removeOpts = toSeq(Optimizer.items).toSet - specifiedOpt
+  for optimizer in removeOpts.items:
+    opt.del optimizer
+
+# use the memory models specified on the command-line
+let specifiedMM = specifiedMemModel(parameters()).toSet
 var gc = specifiedMM
-
 # and if those are omitted, we'll select a single default
 if gc == {}:
   # the default gc varies with version
@@ -245,17 +292,25 @@ if gc == {}:
     # danger is no longer required to pass, so this is a useful place to
     # produce some extra warnings and test future defaults
     when (NimMajor, NimMinor) >= (1, 5):
-      opt[danger].add "--panics:on"
-      opt[danger].add "--experimental:strictFuncs"
-      when false:
-        #
-        # removed because if i cannot make it work, i can hardly expect you to
-        #
-        if ci:
-          # notnil is too slow to run locally
-          opt[danger].add "--experimental:strictNotNil"
+      if danger in opt:
+        opt[danger].add "--panics:on"
+        opt[danger].add "--experimental:strictFuncs"
+
+        # if i cannot make it work, i can hardly expect you to
+        when false:
+          if ci:
+            # notnil is too slow to run locally
+            opt[danger].add "--experimental:strictNotNil"
   else:
     gc.incl refc
+  if ci:
+    gc.incl refc              # on ci, add refc
+    gc.incl markAndSweep      # on ci, add markAndSweep
+    if arc in gc:
+      when (NimMajor, NimMinor) != (1, 2):  # but 1.2 has infinite loops!
+        gc.incl orc           # on ci, add orc if arc is available
+    if js in be:
+      gc.incl vm              # on ci, add vm if js is specified
 
 # options common to all profiles
 var defaults = @["""--path=".""""]  # work around early nim behavior
@@ -275,23 +330,6 @@ elif ci:
     # force incremental off so as not to get confused by a config file
     defaults.add "--incremental:off"
 
-# remote ci expands the matrix
-if ci:
-  cp.add cpp                  # add cpp
-  cp.add js                   # add js
-  cp.add e                    # add nimscript
-  if specifiedMM == {}:       # let the user override CI memory models, also
-    gc.incl refc              # add refc
-    gc.incl markAndSweep      # add markAndSweep
-    if arc in gc:             # add orc if arc is available
-      when (NimMajor, NimMinor) >= (1, 4):  # but 1.2 has infinite loops!
-        gc.incl orc
-    if js in cp:
-      gc.incl vm
-else:
-  # do a danger build locally so we can check time/space; omit release
-  opt.del release
-
 proc cache(p: Profile): string =
   ## come up with a unique cache directory according to where you'd like
   ## to thread your compilations under ci or local environments.
@@ -300,11 +338,11 @@ proc cache(p: Profile): string =
   when compileOption"threads":
     var suffix =
       if ci:
-        "$#.$#.$#" % [ $p.cp, $p.opt, $p.gc ]
+        "$#.$#.$#" % [ $p.be, $p.opt, $p.gc ]
       else:
-        "$#.$#.$#" % [ $hash(p.fn), $p.cp, $p.opt ]
+        "$#.$#.$#" % [ $hash(p.fn), $p.be, $p.opt ]
   else:
-    var suffix = $p.cp  # no threads; use a unique cache for each backend
+    var suffix = $p.be  # no threads; use a unique cache for each backend
 
   result = getTempDir()
   result = result / "balls-nimcache-$#-$#" % [ suffix, $getCurrentProcessId() ]
@@ -333,12 +371,13 @@ proc checkpoint(matrix: Matrix) =
 proc options(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
 
-  # filter out any memory model options from the command-line arguments
+  # grab the user's overrides provided on the command-line
   var params = parameters()
-  for prefix in ["--gc:", "--mm:"]:
-    params =
-      params.filterIt:
-        it.toLowerAscii != (prefix & $p.gc).toLowerAscii
+
+  # filter out any "specified" options we've already consumed
+  params = filteredMemModel params
+  params = filteredOptimizer params
+  params = filteredBackend params
 
   # and otherwise pass those options on to the compiler
   result.add params
@@ -358,7 +397,7 @@ proc options(p: Profile): seq[string] =
   result.add "--outdir:\"$#\"" % [ p.cache ]   # early nims dunno $nimcache
 
   # turn off panics on 1.4 because writeStackTrace breaks js builds
-  if p.cp == js:
+  if p.be == js:
     when (NimMajor, NimMinor) == (1, 4):
       keepItIf(result, it != "--panics:on")
 
@@ -366,7 +405,7 @@ proc options(p: Profile): seq[string] =
     result.add "--define:nodejs"
 
   # nimscript doesn't use a --run
-  if p.cp != e:
+  if p.be != e:
     # don't run compile-only tests
     if "--compileOnly" notin result:
       result.add "--run"
@@ -377,14 +416,14 @@ proc options(p: Profile): seq[string] =
 
   when (NimMajor, NimMinor) >= (1, 5):
     # use goto exceptions only in c
-    if p.cp == c:
+    if p.be == c:
       result.add "--exceptions:goto"
 
 func nonsensical(p: Profile): bool =
   ## certain profiles need not be attempted
-  if p.gc == vm and p.cp notin {js, e}:
+  if p.gc == vm and p.be notin {js, e}:
     true
-  elif p.cp in {js, e} and p.gc != vm:
+  elif p.be in {js, e} and p.gc != vm:
     true
   elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
     true
@@ -402,7 +441,7 @@ proc commandLine*(p: Profile; withHints = false): string =
       else:
         "nim $1 --gc:$2 $3"
 
-  result = pattern % [$p.cp, $p.gc, join(p.options, " ")]
+  result = pattern % [$p.be, $p.gc, join(p.options, " ")]
 
   if withHints:
     # determine which hints to include
@@ -432,7 +471,7 @@ proc shouldPass(p: Profile): bool =
   ## true if the test should pass according to current nim climate
   const MajorMinor = $NimMajor & "." & $NimMinor
   # neither cpp or js or nimscript backends are required to work
-  if p.cp notin {cpp, js, e}:
+  if p.be notin {cpp, js, e}:
     # danger builds can fail; they include experimental features
     if p.opt notin {danger}:
       result = true
@@ -495,7 +534,7 @@ proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
             return true
 
   dominated(Optimizer, opt)
-  #dominated(Compiler, cp)
+  #dominated(Backend, b)
   dominated(MemModel, gc)
 
 proc countRunning(threads: seq[TestThread]): int =
@@ -568,8 +607,8 @@ proc profiles*(fn: string): seq[Profile] =
   for opt in opt.keys:
     if not ci or opt > debug:         # omit debug on ci
       for gc in gc.items:
-        for cp in cp.items:
-          var profile = Profile(fn: fn, gc: gc, cp: cp, opt: opt)
+        for be in be.items:
+          var profile = Profile(fn: fn, gc: gc, be: be, opt: opt)
           if not profile.nonsensical:
             result.add profile
 
