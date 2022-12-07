@@ -575,12 +575,14 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
                     status: addr matrix[p])
 
     var count = threads.len
-    while threads.anyIt it.running:
+    while count != 0:
       sleep 250
       let running = countRunning threads
       if running != count:
         checkpoint matrix
         count = running
+      if count == 0:
+        break
   except CatchableError as e:
     checkpoint e.msg
 
