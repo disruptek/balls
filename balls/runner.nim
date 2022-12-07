@@ -14,9 +14,9 @@ when not compileOption"threads":
 import std/rlocks
 
 import ups/sanitize
-import sync/semaphore
 
 import balls/spec
+import balls/semaphores
 import balls/style
 import balls/tabouli
 import balls
@@ -484,20 +484,16 @@ proc shouldPass(p: Profile): bool =
         discard
 
 var cores: Semaphore
-cores.init countProcessors()
+initSemaphore(cores, countProcessors())
 
 proc performThreaded(p: Payload) {.thread.} =
   ## run perform, but do it in a thread with a lock on the compilation cache
   {.gcsafe.}:
     p.status[] = Wait
     withRLock p.cache[]:
-      wait cores
-      try:
+      withSemaphore cores:
         p.status[] = Runs
         p.status[] = perform p.profile
-      finally:
-        # indicate that we're done with the core
-        signal cores
 
   # we don't conditionally raise anymore because we don't join threads, so
   # we cannot catch it easily in the parent thread; hence we rely upon the
