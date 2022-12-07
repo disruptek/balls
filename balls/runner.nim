@@ -590,8 +590,9 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
       var n = p
       n.opt = debug
       if n notin matrix:      # a safer solution
-        discard perform n
-        matrix[n] = Info
+        if debug in opt:      # do we even know how?
+          discard perform n
+          matrix[n] = Info
       let (s, code) = execCmdEx "nim --version"
       if code == 0:
         checkpoint "failure; compiler:"
