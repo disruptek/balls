@@ -537,8 +537,6 @@ iterator commandLine*(p: Profile; withHints = false): string =
     for command in p.compilerCommandLine(withHints = withHints):
       yield command
   of anValgrindInvocation:
-    for command in p.compilerCommandLine(withHints = withHints):
-      yield command
     for command in p.valgrindCommandLine(withHints = withHints):
       yield command
 
