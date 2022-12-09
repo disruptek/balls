@@ -762,10 +762,10 @@ else:
             else:
               return true
 
-  dominated(Analyzer, an)
-  dominated(Optimizer, opt)
-  #dominated(Backend, b)
-  dominated(MemModel, gc)
+    dominated(Analyzer, an)
+    dominated(Optimizer, opt)
+    #dominated(Backend, b)
+    dominated(MemModel, gc)
 
   proc perform*(matrix: var Matrix; profs: seq[Profile]) =
     ## Try to run `profs` and fail early if you can.
