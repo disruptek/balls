@@ -598,6 +598,7 @@ proc shouldCrash(matrix: var Matrix; p: Profile): bool =
     result = true
 
 when (NimMajor, NimMinor) >= (1, 7):
+  import std/atomics
   import std/lists
 
   import pkg/insideout
@@ -617,6 +618,8 @@ when (NimMajor, NimMinor) >= (1, 7):
                     status: StatusKind) {.cps: Update.} =
     setup profile, status
     goto monitor
+
+  var pleaseCrash: Atomic[bool]
 
   proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
     ## debounce status updates received from test attempts
@@ -639,7 +642,7 @@ when (NimMajor, NimMinor) >= (1, 7):
           # check to see if we should crash
           if matrix.shouldCrash(mail.profile):
             checkpoint matrix
-            quit 1
+            pleaseCrash.store true
           else:
             dirty = true
         # send control wherever it needs to go next
@@ -699,6 +702,8 @@ when (NimMajor, NimMinor) >= (1, 7):
     # drain the pool
     while not pool.isEmpty:
       pool.remove pool.head
+      if load pleaseCrash:
+        break
 
 else:
   # pre-nim-1.7
