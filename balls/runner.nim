@@ -350,22 +350,16 @@ proc cache*(p: Profile): string =
   result = getTempDir()
   result = result / "balls-nimcache-$#-$#" % [ suffix, $getCurrentProcessId() ]
 
-proc attempt*(cmd: string; display = false): int =
-  ## attempt execution of a random command; returns the exit code
+proc attempt*(cmd: string): (string, int) =
+  ## attempt execution of a random command; returns output and exit code
   try:
     when compileOption"threads":
-      var output: string
-      (output, result) = execCmdEx cmd
-      if result != 0 or display:
-        noclobber:
-          checkpoint "$ " & cmd
-          checkpoint output
+      result = execCmdEx cmd
     else:
-      checkpoint "$ " & cmd
-      result = execCmd cmd
+      result = ("", execCmd cmd)
   except OSError as e:
-    checkpoint "$1: $2" % [ $e.name, e.msg ]
-    result = 1
+    let output = "$1: $2" % [ $e.name, e.msg ]
+    result = (output, 1)
 
 proc checkpoint*(matrix: Matrix) =
   checkpoint:
@@ -542,13 +536,18 @@ iterator commandLine*(p: Profile; withHints = false): string =
 proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
   assert not p.nonsensical
-  for command in p.commandLine(withHints = true):
-    result =
-      # NOTE: `display = p.opt == danger and not ci` was too spammy
-      case attempt(command, display = false)
-      of 0: Pass
-      else: Fail
-    if result == Fail:
+  let hintFree = p.commandLine(withHints = false).toSeq
+  let commands = p.commandLine(withHints = true).toSeq
+  for index in 0..commands.high:
+    let (output, code) = attempt commands[index]
+    case code
+    of 0:
+      result = Pass
+    else:
+      result = Fail
+      for hintless in hintFree[0..index].items:
+        checkpoint "$ " & hintless
+      checkpoint output
       break
 
 proc `[]=`*(matrix: var Matrix; p: Profile; s: StatusKind) =
