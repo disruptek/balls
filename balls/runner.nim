@@ -145,7 +145,7 @@ template makeSpecifier(tipe: typedesc[enum]; prefixes: openArray[string]): untyp
           result.add value
 
   proc `filtered tipe`(params: openArray[string]): seq[string] {.used.} =
-    var params = params
+    var params = @params
     for value in tipe:
       for prefix in prefixes:
         params =
