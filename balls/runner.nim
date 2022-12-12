@@ -151,6 +151,7 @@ template makeSpecifier(tipe: typedesc[enum]; prefixes: openArray[string]): untyp
         params =
           params.filterIt:
             it.toLowerAscii != (prefix & $value).toLowerAscii
+    result = params
 
 makeSpecifier(MemModel, ["--gc:", "--mm:"])
 makeSpecifier(Backend, ["-b:", "--backend:"])
