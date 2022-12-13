@@ -797,11 +797,6 @@ macro suite*(name: string; tests: untyped) =
         nnkDiscardStmt.newTree:
           bindSym"execShellCmd".newCall newLit""
 
-    when not defined(js):
-      # ensure that we flush streams on exit
-      add suite:
-        bindSym"addExitProc".newCall bindSym"flushStreams"
-
     var parent = suite
     for index, n in tests.pairs:
       if scopedTemplate n:
@@ -835,6 +830,12 @@ macro suite*(name: string; tests: untyped) =
   finally:
     add suite:
       reportResults()
+
+    when not defined(js):
+      # ensure that we flush streams on exit
+      add suite:
+        newCall bindSym"flushStreams"
+
     add result:
       newBlockStmt:
         suite
