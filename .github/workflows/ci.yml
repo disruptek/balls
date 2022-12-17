@@ -5,7 +5,7 @@ on:
 
   push:
     branches:
-      - master
+      - v4
     paths:
       - '**.cfg'
       - '**.nims'
@@ -13,6 +13,7 @@ on:
       - '**.nimble'
       - 'tests/**'
       - '.github/workflows/ci.yml'
+
   pull_request:
     branches:
       - '*'
@@ -30,12 +31,12 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest', 'macos-latest', 'ubuntu-latest']
-        nim: ['devel', 'version-1-6', 'version-1-4', 'version-1-2', 'version-1-0']
+        nim: ['devel']
     name: '${{ matrix.os }} (${{ matrix.nim }})'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: ci
 

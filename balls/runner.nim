@@ -1,6 +1,8 @@
 import std/algorithm
+import std/atomics
 import std/hashes
 import std/heapqueue
+import std/lists
 import std/options
 import std/os
 import std/osproc
@@ -10,9 +12,9 @@ import std/strutils
 import std/tables
 import std/times
 
-when not compileOption"threads":
-  {.error: "balls currently requires threads".}
-import ups/sanitize
+import pkg/insideout
+import pkg/cps
+import pkg/ups/sanitize
 
 import balls/spec
 import balls/semaphores
@@ -244,10 +246,7 @@ proc hints*(p: Profile; ci: bool): string =
   if ci:
     # remove spam from ci logs
     omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
-    when (NimMajor, NimMinor) >= (1, 2):
-      omit.add "ObservableStores"
-    when (NimMajor, NimMinor) >= (1, 4):
-      omit.add "UnreachableCode"
+    omit.add ["ObservableStores", "UnreachableCode"]
   for warning in omit.items:
     result.add " --warning[$#]=off" % [ warning ]
 
@@ -287,28 +286,17 @@ let specifiedMM = specifiedMemModel(parameters()).toSet
 var gc* = specifiedMM
 # and if those are omitted, we'll select a single default
 if gc == {}:
-  # the default gc varies with version
-  when (NimMajor, NimMinor) >= (1, 2):
-    gc.incl arc
-    # danger is no longer required to pass, so this is a useful place to
-    # produce some extra warnings and test future defaults
-    when (NimMajor, NimMinor) >= (1, 5):
-      if danger in opt:
-        opt[danger].add "--panics:on"
-        opt[danger].add "--experimental:strictFuncs"
-
-        # if i cannot make it work, i can hardly expect you to
-        when false:
-          if ci:  # notnil is too slow to run locally
-            opt[danger].add "--experimental:strictNotNil"
-  else:
-    gc.incl refc
+  gc.incl arc
+  # danger is no longer required to pass, so this is a useful place to
+  # produce some extra warnings and test future defaults
+  if danger in opt:
+    opt[danger].add "--panics:on"
+    opt[danger].add "--experimental:strictFuncs"
   if ci:
     gc.incl refc              # on ci, add refc
     gc.incl markAndSweep      # on ci, add markAndSweep
     if arc in gc:
-      when (NimMajor, NimMinor) != (1, 2):  # but 1.2 has infinite loops!
-        gc.incl orc           # on ci, add orc if arc is available
+      gc.incl orc             # on ci, add orc if arc is available
 
 # if the nimscript or javascript backends are specified, enable the vm
 if {e, js} * be != {}:
@@ -320,17 +308,9 @@ var defaults* = @["""--path=".""""]  # work around early nim behavior
 when compileOption"threads":
   defaults.add "--parallelBuild:1"
 
-if (NimMajor, NimMinor) >= (1, 8):
-  # always use IC if it's available
-  defaults.add "--incremental:on"
-elif ci:
-  # otherwise, force rebuild only on CI
-  if not compileOption"threads":
-    # and only outside threads
-    defaults.add "--forceBuild:on"
-  when (NimMajor, NimMinor) >= (1, 5):
-    # force incremental off so as not to get confused by a config file
-    defaults.add "--incremental:off"
+if ci:
+  # force incremental off so as not to get confused by a config file
+  defaults.add "--incremental:off"
 
 proc cache*(p: Profile): string =
   ## come up with a unique cache directory according to where you'd like
@@ -349,6 +329,12 @@ proc cache*(p: Profile): string =
       "$#.$#.$#.$#" % [ $hash(p.fn), $p.be, opt, $p.gc ]
   result = getTempDir()
   result = result / "balls-nimcache-$#-$#" % [ suffix, $getCurrentProcessId() ]
+
+proc runCommandLine(cmd: string; args: openArray[string]): (string, int) =
+  const options = {poEvalCommand, poStdErrToStdOut, poUsePath}
+  var process = startProcess(cmd, options = options)
+  # ... process.outputStream or process.outputHandle
+  close process
 
 proc attempt*(cmd: string): (string, int) =
   ## attempt execution of a random command; returns output and exit code
@@ -395,11 +381,7 @@ proc options*(p: Profile): seq[string] =
   # use the nimcache for our output directory
   result.add "--outdir:\"$#\"" % [ p.cache ]   # early nims dunno $nimcache
 
-  # turn off panics on 1.4 because writeStackTrace breaks js builds
   if p.be == js:
-    when (NimMajor, NimMinor) == (1, 4):
-      keepItIf(result, it != "--panics:on")
-
     # add --define:nodejs on js backend so that getCurrentDir() works
     result.add "--define:nodejs"
 
@@ -410,14 +392,9 @@ proc options*(p: Profile): seq[string] =
       if not result.parameter "--compileOnly":
         result.add "--run"
 
-  # turn off sinkInference on 1.2 builds because it breaks VM code
-  when (NimMajor, NimMinor) == (1, 2):
-    result.add "--sinkInference:off"
-
-  when (NimMajor, NimMinor) >= (1, 5):
-    # use goto exceptions only in c
-    if p.be == c:
-      result.add "--exceptions:goto"
+  # use goto exceptions only in c
+  if p.be == c:
+    result.add "--exceptions:goto"
 
   template installDebugInfo {.dirty.} =
     # adjust the debugging symbols for asan/tsan builds
@@ -457,8 +434,6 @@ proc nonsensical*(p: Profile): bool =
     true
   elif p.an != Execution and p.gc notin {arc, orc}:
     true
-  elif p.an != Execution and (NimMajor, NimMinor) < (1, 6):
-    true
   else:
     false
 
@@ -468,10 +443,7 @@ iterator compilerCommandLine(p: Profile; withHints = false): string =
     if p.gc == vm:
       "nim $1 $3"
     else:
-      when (NimMajor, NimMinor) >= (1, 7):
-        "nim $1 --mm:$2 $3"
-      else:
-        "nim $1 --gc:$2 $3"
+      "nim $1 --mm:$2 $3"
   var result = pattern % [$p.be, $p.gc, join(p.options, " ")]
   if withHints:
     # determine which hints to include
@@ -557,26 +529,18 @@ proc `[]=`*(matrix: var Matrix; p: Profile; s: StatusKind) =
 
 proc shouldPass*(p: Profile): bool =
   ## true if the test should pass according to current nim climate
-  const MajorMinor = $NimMajor & "." & $NimMinor
-  # neither cpp or js or nimscript backends are required to work
+  # neither cpp nor js nor nimscript backends are required to work
   if p.be notin {cpp, js, e}:
     # danger builds can fail; they include experimental features
     if p.opt notin {danger}:
       result = true
-      case MajorMinor
-      of "1.4", "1.3", "1.2", "1.1", "1.0":
-        # arc/orc have fatal bugs on 1.4
-        if p.gc >= arc:
-          result = false
-      else:
-        discard
 
 var cores: Semaphore
 initSemaphore(cores, countProcessors())
 
 proc shouldCrash(matrix: var Matrix; p: Profile): bool =
-  # let the user deny crashes; never crash outside ci
-  if not ballsFailFast or not ci: return false
+  # let the user deny crashes
+  if not ballsFailFast: return false
 
   if matrix[p] > Part and p.shouldPass:
     for command in p.commandLine:
@@ -597,226 +561,113 @@ proc shouldCrash(matrix: var Matrix; p: Profile): bool =
       checkpoint "failure; unable to determine compiler version"
     result = true
 
-when (NimMajor, NimMinor) >= (1, 7):
-  import std/atomics
-  import std/lists
+type
+  Update = ref object of Continuation
+    profile: Profile
+    status: StatusKind
 
-  import pkg/insideout
-  import pkg/cps
+proc setup(c: Update; p: Profile; s: StatusKind): Update {.cpsMagic.} =
+  c.profile = p
+  c.status = s
+  result = c
 
-  type
-    Update = ref object of Continuation
-      profile: Profile
-      status: StatusKind
+proc statusUpdate(monitor: Mailbox[Update]; profile: Profile;
+                  status: StatusKind) {.cps: Update.} =
+  setup profile, status
+  goto monitor
 
-  proc setup(c: Update; p: Profile; s: StatusKind): Update {.cpsMagic.} =
-    c.profile = p
-    c.status = s
-    result = c
+var pleaseCrash: Atomic[bool]
 
-  proc statusUpdate(monitor: Mailbox[Update]; profile: Profile;
-                    status: StatusKind) {.cps: Update.} =
-    setup profile, status
-    goto monitor
-
-  var pleaseCrash: Atomic[bool]
-
-  proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
-    ## debounce status updates received from test attempts
-    var matrix: Matrix
-    var mail: Update
-    var dirty = false
-    while true:
-      if not box.tryRecv mail:
-        # there's nothing waiting; dump the matrix?
-        if dirty:
+proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
+  ## debounce status updates received from test attempts
+  var matrix: Matrix
+  var mail: Update
+  var dirty = false
+  while true:
+    if not box.tryRecv mail:
+      # there's nothing waiting; dump the matrix?
+      if dirty:
+        checkpoint matrix
+        dirty = false
+      mail = recv box
+    if dismissed mail:
+      break
+    else:
+      # update the matrix with the profile->status
+      tables.`[]=`(matrix, mail.profile, mail.status)
+      if mail.status != Wait:
+        # check to see if we should crash
+        if matrix.shouldCrash(mail.profile):
           checkpoint matrix
-          dirty = false
-        mail = recv box
-      if dismissed mail:
-        break
-      else:
-        # update the matrix with the profile->status
-        tables.`[]=`(matrix, mail.profile, mail.status)
-        if mail.status != Wait:
-          # check to see if we should crash
-          if matrix.shouldCrash(mail.profile):
-            checkpoint matrix
-            pleaseCrash.store true
-          else:
-            dirty = true
-        # send control wherever it needs to go next
-        discard trampoline Continuation(mail)
+          echo "CRASH"
+          pleaseCrash.store true
+        else:
+          dirty = true
+      # send control wherever it needs to go next
+      discard trampoline Continuation(mail)
 
-  proc runBatch(box: Mailbox[Continuation]; monitor: Mailbox[Update];
-                profiles: seq[Profile]): StatusKind {.cps: Continuation.} =
-    ## run a series of profiles in order
-    var queue = profiles.toHeapQueue
+proc runBatch(box: Mailbox[Continuation]; monitor: Mailbox[Update];
+              profiles: seq[Profile]): StatusKind {.cps: Continuation.} =
+  ## run a series of profiles in order
+  var queue = profiles.toHeapQueue
 
-    # mark them as waiting
-    var profiles = profiles
-    while profiles.len > 0:
-      statusUpdate(monitor, pop(profiles), Wait)
-      goto box
+  # mark them as waiting
+  var profiles = profiles
+  while profiles.len > 0:
+    statusUpdate(monitor, pop(profiles), Wait)
+    goto box
 
-    while queue.len > 0:
-      goto box
-      let profile = pop queue
-      if result >= Skip: # prior failure; skip the remainder
-        result = Skip
-      else:              # grab a core, mark it running, and run it
-        withSemaphore cores:
-          statusUpdate(monitor, profile, Runs)
-          goto box
-          result = perform profile
-      statusUpdate(monitor, profile, result)
-    # the batch is complete; drop a thread
-    box.send nil.Continuation
+  while queue.len > 0:
+    goto box
+    let profile = pop queue
+    if result >= Skip: # prior failure; skip the remainder
+      result = Skip
+    else:              # grab a core, mark it running, and run it
+      withSemaphore cores:
+        statusUpdate(monitor, profile, Runs)
+        goto box
+        result = perform profile
+    statusUpdate(monitor, profile, result)
+  # the batch is complete; drop a thread
+  box.send nil.Continuation
 
-  const MonitorService = whelp matrixMonitor
-  proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
-    ## concurrent testing of the provided profiles
-    if profiles.len == 0:
-      return
+const MonitorService = whelp matrixMonitor
+proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
+  ## concurrent testing of the provided profiles
+  if profiles.len == 0:
+    return
 
-    # setup a debouncing matrix monitor
-    var monitor = spawn MonitorService
-    defer: quit monitor
+  # batch the profiles according to their cache
+  var batches: Table[Hash, seq[Profile]]
+  for profile in profiles.items:
+    let cache = hash(cache profile)
+    if cache in batches:
+      batches[cache].add profile
+    else:
+      batches[cache] = @[profile]
 
-    # batch the profiles according to their cache
-    var batches: Table[Hash, seq[Profile]]
-    for profile in profiles.items:
-      let cache = hash(cache profile)
-      if cache in batches:
-        batches[cache].add profile
-      else:
-        batches[cache] = @[profile]
+  # make a pool of workers and send them the batches
+  var workers = newMailbox[Continuation]()
+  var pool = newPool(ContinuationWaiter, workers, batches.len)
 
-    # make a pool of workers and send them the batches
-    var workers = newMailbox[Continuation]()
-    var pool = newPool(ContinuationWaiter, workers, batches.len)
-    for profiles in batches.values:
-      workers.send:
-        whelp runBatch(workers, monitor.mailbox, profiles)
+  # setup a debouncing matrix monitor
+  var monitor: Runtime[Continuation, Update]
+  let updates = monitor.spawn MonitorService
+  defer: quit monitor
 
-    # drain the pool
-    while not pool.isEmpty:
-      pool.remove pool.head
-      if load pleaseCrash:
-        break
+  for profiles in batches.values:
+    workers.send:
+      whelp runBatch(workers, updates, profiles)
 
-else:
-  # pre-nim-1.7
-  import std/rlocks
-
-  type
-    Payload = object
-      cache: ptr RLock
-      profile: Profile
-      status: ptr StatusKind         # ptr is necessary for non-arc nims
-
-    TestThread = Thread[Payload]
-
-  proc countRunning(threads: seq[TestThread]): int =
-    ## a countIt for early nims 🙄
-    for thread in threads.items:
-      if thread.running:
-        inc result
-
-  proc performThreaded(p: Payload) {.thread.} =
-    ## run perform, but do it in a thread with a lock on the compilation cache
-    {.gcsafe.}:
-      p.status[] = Wait
-      withRLock p.cache[]:
-        withSemaphore cores:
-          p.status[] = Runs
-          p.status[] = perform p.profile
-
-    # we don't conditionally raise anymore because we don't join threads, so
-    # we cannot catch it easily in the parent thread; hence we rely upon the
-    # parent to measure the status.  no big deal.
-    #
-    when false:
-      case p.status[]
-      of Pass:
-        discard
-      else:
-        if p.profile.shouldPass:
-          let message = "failure: " & $p.profile & "\n" & p.profile.commandLine
-          when ballsFailFast:
-            # if we should crash, go ahead and raise
-            raise CatchableError.newException message
-          else:
-            # or just emit an error message
-            checkpoint message
-
-  proc lesserTestFailed(matrix: Matrix; profile: Profile): bool =
-    ## true if a lesser test already failed, meaning we can
-    ## skip the provided profile safely
-    template dominated(e: typedesc[enum]; field: untyped) {.dirty.} =
-      for value in e.items:
-        if value < profile.field:
-          var test = profile
-          test.field = value
-          if test in matrix and matrix[test] > Part:
-            # a tiny hack to ensure that vm dominance is separate
-            when e is MemModel:
-              if (test.gc == vm) == (profile.gc == vm):
-                return true
-            else:
-              return true
-
-    dominated(Analyzer, an)
-    dominated(Optimizer, opt)
-    #dominated(Backend, b)
-    dominated(MemModel, gc)
-
-  proc perform*(matrix: var Matrix; profs: seq[Profile]) =
-    ## Try to run `profs` and fail early if you can.
-    var threads = newSeqOfCap[TestThread](profs.len)
-    var locks = initTable[string, RLock](2)
-    #var profiles = profs.toHeapQueue   # only works in later nims
-    var profiles: HeapQueue[Profile]
-    for p in profs.items:
-      profiles.push p
-
-    # we need to enlarge the matrix table and pre-allocate the status
-    # values so that we can pass them as pointers to the threads
-    for p in profs.items:
-      # safely re-entrant, and []= would print the table... 😉
-      discard matrix.hasKeyOrPut(p, None)
-      # allocate and initialize locks for the nimcaches while we're at it
-      if p.cache notin locks:
-        locks[p.cache] = default RLock
-        initRLock locks[p.cache]
-
-    try:
-      while profiles.len > 0:
-        var p = profiles.pop
-        if p notin matrix:
-          if lesserTestFailed(matrix, p):
-            matrix[p] = Skip
-          else:
-            setLen(threads, threads.len + 1)
-            createThread threads[^1], performThreaded:
-              Payload(cache: addr locks[p.cache], profile: p,
-                      status: addr matrix[p])
-
-      var count = threads.len
-      while count != 0:
-        sleep 250
-        let running = countRunning threads
-        if running != count:
-          checkpoint matrix
-          count = running
-        if count == 0:
-          break
-    except CatchableError as e:
-      checkpoint e.msg
-
-    for p in matrix.keys:
-      if matrix.shouldCrash(p):
-        quit 1
+  # drain the pool
+  while not pool.isEmpty:
+    drain pool
+    if load pleaseCrash:
+      echo "QUIT1!"
+      quit 1
+  if load pleaseCrash:
+    echo "QUIT2!"
+    quit 1
 
 proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
