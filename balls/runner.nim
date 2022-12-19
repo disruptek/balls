@@ -25,6 +25,8 @@ import balls
 const
   ballsFailFast* {.booldefine.} = true ##
   ## if true, quit early on a test failure
+  ballsUseValgrind* {.booldefine.} = true ##
+  ## if true, attempt to use valgrind in preference to asan/tsan
 
 type
   Backend* = enum  ## backends that we test
@@ -414,7 +416,7 @@ proc options*(p: Profile): seq[string] =
   else:
     discard
 
-let hasValgrind = "" != findExe"valgrind"
+let useValgrind = ballsUseValgrind and "" != findExe"valgrind"
 
 proc nonsensical*(p: Profile): bool =
   ## certain profiles need not be attempted
@@ -424,9 +426,9 @@ proc nonsensical*(p: Profile): bool =
     true
   elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
     true
-  elif p.an in anValgrindInvocation and not hasValgrind:
+  elif p.an in anValgrindInvocation and not useValgrind:
     true
-  elif p.an in {ASanitizer, TSanitizer} and hasValgrind:
+  elif p.an in {ASanitizer, TSanitizer} and useValgrind:
     true
   elif p.gc == vm and p.an in anValgrindInvocation:
     true
