@@ -525,6 +525,9 @@ iterator valgrindCommandLine(p: Profile; withHints = false): seq[string] =
     result.add: ["--report-signal-unlocked=no"]
   else:
     discard
+  let userFlags = getEnv"BALLS_VALGRIND_FLAGS"
+  if userFlags != "":
+    result.add: userFlags
   result.add: executable
   yield result
 
