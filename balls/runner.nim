@@ -3,11 +3,13 @@ import std/atomics
 import std/hashes
 import std/heapqueue
 import std/lists
+import std/locks
 import std/options
 import std/os
 import std/osproc
 import std/sequtils
 import std/sets
+import std/streams
 import std/strutils
 import std/tables
 import std/times
@@ -15,6 +17,8 @@ import std/times
 import pkg/insideout
 import pkg/cps
 import pkg/ups/sanitize
+import pkg/ups/config
+import pkg/ups/paths
 
 import balls/spec
 import balls/semaphores
@@ -232,7 +236,7 @@ proc matrixTable*(matrix: Matrix): string =
   # values and 2 for wide emojis
   result = render(tab, size = len $None)
 
-proc hints*(p: Profile; ci: bool): string =
+proc hints*(p: Profile; ci: bool): seq[string] =
   ## Compute `--hint` and `--warning` flags as appropriate given Profile
   ## `p`, `ci` status, and compile-time Nim version information.
   var omit = @["Cc", "Link", "Conf", "Processing", "Exec", "Name",
@@ -241,7 +245,7 @@ proc hints*(p: Profile; ci: bool): string =
     # ignore performance warnings outside of local danger builds
     omit.add "Performance"
   for hint in omit.items:
-    result.add " --hint[$#]=off" % [ hint ]
+    result.add "--hint[$#]=off" % [ hint ]
 
   ## compute --warning(s) as appropriate
   omit = @[]
@@ -250,10 +254,9 @@ proc hints*(p: Profile; ci: bool): string =
     omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
     omit.add ["ObservableStores", "UnreachableCode"]
   for warning in omit.items:
-    result.add " --warning[$#]=off" % [ warning ]
+    result.add "--warning[$#]=off" % [ warning ]
 
 let ci* = getEnv("GITHUB_ACTIONS", "false") == "true"
-var matrix*: Matrix
 # set some default matrix members (profiles)
 var opt* = {
   debug: @["--debuginfo", "--stackTrace:on", "--excessiveStackTrace:on"],
@@ -308,7 +311,7 @@ if {e, js} * be != {}:
 var defaults* = @["""--path=".""""]  # work around early nim behavior
 
 when compileOption"threads":
-  defaults.add "--parallelBuild:1"
+  defaults.add "--parallelBuild:0"
 
 if ci:
   # force incremental off so as not to get confused by a config file
@@ -317,6 +320,9 @@ if ci:
 proc cache*(p: Profile): string =
   ## come up with a unique cache directory according to where you'd like
   ## to thread your compilations under ci or local environments.
+
+  # FIXME: this gets replaced with a config sniff?
+
   let opt =
     case p.an
     of ASanitizer, TSanitizer:
@@ -332,19 +338,35 @@ proc cache*(p: Profile): string =
   result = getTempDir()
   result = result / "balls-nimcache-$#-$#" % [ suffix, $getCurrentProcessId() ]
 
-proc runCommandLine(cmd: string; args: openArray[string]): (string, int) =
-  const options = {poEvalCommand, poStdErrToStdOut, poUsePath}
-  var process = startProcess(cmd, options = options)
-  # ... process.outputStream or process.outputHandle
-  close process
+var startProcessLock: Lock
+initLock startProcessLock
 
-proc attempt*(cmd: string): (string, int) =
+proc runCommandLine(commandArguments: openArray[string]): (string, int) =
+  ## run a command with arguments; returns (output, exitcode)
+  const options = {poStdErrToStdOut}
+  let cmd = commandArguments[0]
+  let arguments: seq[string] =
+    if commandArguments.len > 1:
+      commandArguments[1..^1]
+    else:
+      @[]
+  if not cmd.fileExists:
+    raise OSError.newException "file not found: " & cmd
+  else:
+    var process: Process
+    withLock startProcessLock:
+      process = startProcess(cmd, args = arguments, options = options)
+    try:
+      close process.inputStream
+      let (lines, code) = process.readLines()
+      result = (lines.join("\n"), code)
+    finally:
+      close process
+
+proc attempt*(command: seq[string]): (string, int) =
   ## attempt execution of a random command; returns output and exit code
   try:
-    when compileOption"threads":
-      result = execCmdEx cmd
-    else:
-      result = ("", execCmd cmd)
+    result = runCommandLine command
   except OSError as e:
     let output = "$1: $2" % [ $e.name, e.msg ]
     result = (output, 1)
@@ -355,13 +377,31 @@ proc checkpoint*(matrix: Matrix) =
 
 proc output*(p: Profile): string =
   ## return the output filename for the build
-  when compileOption"threads":
-    "$#_$#_$#" % [ short(p.fn), $getThreadId(), $hash(p) ]
-  else:
-    "$#_$#" % [ short(p.fn), $hash(p) ]
+
+  # FIXME: this gets replaced with a config sniff?
+
+  "$#_$#_$#" % [ short(p.fn), $getThreadId(), $hash(p) ]
+
+proc assetOptions*(p: Profile): seq[string] =
+  ## by setting the cache and output paths, we can find our assets
+
+  # FIXME: this gets replaced with a config sniff?
+
+  # specify the nimcache directory
+  result.add "--nimCache:" & p.cache
+
+  # specify the output filename
+  result.add "--out:" & p.output
+
+  # use the nimcache for our output directory
+  result.add "--outDir:" & p.cache
 
 proc options*(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
+
+  # add a memory management option if appropriate
+  if p.gc != vm:
+    result.add "--mm:" & $p.gc
 
   # grab the user's overrides provided on the command-line
   var params = parameters()
@@ -373,15 +413,6 @@ proc options*(p: Profile): seq[string] =
 
   # and otherwise pass those options on to the compiler
   result.add params
-
-  # specify the nimcache directory
-  result.add "--nimCache:" & p.cache
-
-  # specify the output filename
-  result.add "--out:\"$#\"" % [ p.output ]
-
-  # use the nimcache for our output directory
-  result.add "--outdir:\"$#\"" % [ p.cache ]   # early nims dunno $nimcache
 
   if p.be == js:
     # add --define:nodejs on js backend so that getCurrentDir() works
@@ -416,7 +447,9 @@ proc options*(p: Profile): seq[string] =
   else:
     discard
 
-let useValgrind = ballsUseValgrind and "" != findExe"valgrind"
+let nimExecutable = findExe"nim"
+let valgrindExecutable = findExe"valgrind"
+let useValgrind = ballsUseValgrind and "" != valgrindExecutable
 
 proc nonsensical*(p: Profile): bool =
   ## certain profiles need not be attempted
@@ -439,35 +472,33 @@ proc nonsensical*(p: Profile): bool =
   else:
     false
 
-iterator compilerCommandLine(p: Profile; withHints = false): string =
+iterator compilerCommandLine(p: Profile; withHints = false): seq[string] =
   ## compose the interesting parts of the compiler invocation
-  let pattern =
-    if p.gc == vm:
-      "nim $1 $3"
-    else:
-      "nim $1 --mm:$2 $3"
-  var result = pattern % [$p.be, $p.gc, join(p.options, " ")]
-  if withHints:
-    # determine which hints to include
-    let hs = hints(p, ci)
-    # add the hints into the invocation ahead of the filename
-    result &= " " & hs
-  # return the command-line with the filename for c+p reasons
-  result &= " " & p.fn
-  # yield the compilation command
-  yield result
+  var result = @[nimExecutable]
+  result.add $p.be                    # add the backend, eg. `c`, `js`, `e`
+  result.add p.options                # add other options for this profile
+
+  if withHints:                       # toggled so we can omit in an echo
+    result.add p.assetOptions         # add --nimCache, --out, --outDir
+
+  if withHints:                       # toggled so we can omit in an echo
+    result.add hints(p, ci)           # add Cc, Link, Conf, Processing, etc.
+
+  result.add p.fn                     # add the filename for c+p reasons
+
+  yield result                        # yield the compilation command
 
   if not p.options.parameter("--compileOnly"):
     # invoke the output
     case p.be
     of js:
-      yield "node " & (p.cache / p.output)
+      yield @[findExe"node", p.cache / p.output]
     of e:
-      yield "nim e " & p.fn
+      yield @[nimExecutable, "e", p.fn]
     else:
-      yield p.cache / p.output
+      yield @[p.cache / p.output]
 
-iterator valgrindCommandLine(p: Profile; withHints = false): string =
+iterator valgrindCommandLine(p: Profile; withHints = false): seq[string] =
   ## compose the interesting parts of the valgrind invocation
   let executable =
     block:
@@ -480,7 +511,7 @@ iterator valgrindCommandLine(p: Profile; withHints = false): string =
         break
       compilation.cache / compilation.output
 
-  var result = @["valgrind"]
+  var result = @[valgrindExecutable]
   result.add: "--error-exitcode=255"  # for zevv
   result.add: "--tool=" & (if p.an == DataRacer: "drd" else: $p.an)
   case p.an
@@ -495,9 +526,10 @@ iterator valgrindCommandLine(p: Profile; withHints = false): string =
   else:
     discard
   result.add: executable
-  yield join(result, " ")
+  yield result
 
-iterator commandLine*(p: Profile; withHints = false): string =
+iterator commandLine*(p: Profile;
+                      withHints = false, withCache = false): seq[string] =
   ## compose the interesting parts of the process invocations
   case p.an
   of anCompilerInvocation:
@@ -507,21 +539,34 @@ iterator commandLine*(p: Profile; withHints = false): string =
     for command in p.valgrindCommandLine(withHints = withHints):
       yield command
 
+var cores: Semaphore
+initSemaphore(cores, countProcessors())
+var pleaseCrash: Atomic[bool]
+
 proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
   assert not p.nonsensical
-  let hintFree = p.commandLine(withHints = false).toSeq
+  let echoHints = getEnv"BALLS_HINTS" != ""
+  let hintFree = p.commandLine(withHints = echoHints).toSeq
   let commands = p.commandLine(withHints = true).toSeq
   for index in 0..commands.high:
+    if load pleaseCrash:
+      result = Skip
+      break
     let (output, code) = attempt commands[index]
     case code
     of 0:
       result = Pass
     else:
       result = Fail
-      for hintless in hintFree[0..index].items:
-        checkpoint "$ " & hintless
-      checkpoint output
+      var chain: seq[string]
+      for index, hintless in hintFree[0..<index].pairs:
+        chain.add hintless.join(" ")
+        chain.add "#$#/$# okay." % [ $getThreadId(), $(index + 1) ]
+      chain.add hintFree[index].join(" ")
+      chain.add "#$#/$# fail!" % [ $getThreadId(), $(index + 1) ]
+      chain.add output
+      checkpoint chain.join("\n")  # collect the complete failure history
       break
 
 proc `[]=`*(matrix: var Matrix; p: Profile; s: StatusKind) =
@@ -537,17 +582,10 @@ proc shouldPass*(p: Profile): bool =
     if p.opt notin {danger}:
       result = true
 
-var cores: Semaphore
-initSemaphore(cores, countProcessors())
-
 proc shouldCrash(matrix: var Matrix; p: Profile): bool =
   # let the user deny crashes
-  if not ballsFailFast: return false
-
-  if matrix[p] > Part and p.shouldPass:
-    for command in p.commandLine:
-      checkpoint command
-    setBallsResult int(matrix[p] > Part)
+  result = ballsFailFast and matrix[p] > Part and p.shouldPass
+  if result:
     # before we fail the ci, run a debug test for shits and grins
     var n = p
     n.opt = debug
@@ -555,13 +593,12 @@ proc shouldCrash(matrix: var Matrix; p: Profile): bool =
       if debug in opt:      # do we even know how?
         discard perform n
         matrix[n] = Info
-    let (s, code) = execCmdEx "nim --version"
+    let (s, code) = execCmdEx "$# --version" % [ nimExecutable ]
     if code == 0:
-      checkpoint "failure; compiler:"
+      checkpoint "failure; compiler $#:" % [ nimExecutable ]
       checkpoint s
     else:
-      checkpoint "failure; unable to determine compiler version"
-    result = true
+      checkpoint "failure; unable to run compiler $#" % [ nimExecutable ]
 
 type
   Update = ref object of Continuation
@@ -577,8 +614,6 @@ proc statusUpdate(monitor: Mailbox[Update]; profile: Profile;
                   status: StatusKind) {.cps: Update.} =
   setup profile, status
   goto monitor
-
-var pleaseCrash: Atomic[bool]
 
 proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
   ## debounce status updates received from test attempts
@@ -600,49 +635,58 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
       if mail.status != Wait:
         # check to see if we should crash
         if matrix.shouldCrash(mail.profile):
-          checkpoint matrix
-          echo "CRASH"
+          when false:
+            setBallsResult int(matrix[p] > Part)
           pleaseCrash.store true
         else:
           dirty = true
+      var mail = Continuation: move mail
       # send control wherever it needs to go next
-      discard trampoline Continuation(mail)
+      discard trampoline mail
+      wasMoved mail
+  if dirty:
+    checkpoint matrix
 
-proc runBatch(box: Mailbox[Continuation]; monitor: Mailbox[Update];
-              profiles: seq[Profile]): StatusKind {.cps: Continuation.} =
+proc runBatch(home: Mailbox[Continuation]; monitor: Mailbox[Update];
+              cache: string; profiles: seq[Profile]): StatusKind
+  {.cps: Continuation.} =
   ## run a series of profiles in order
-  var queue = profiles.toHeapQueue
+  try:
+    var queue = profiles.toHeapQueue
 
-  # mark them as waiting
-  var profiles = profiles
-  while profiles.len > 0:
-    statusUpdate(monitor, pop(profiles), Wait)
-    goto box
+    # mark them as waiting
+    var profiles = profiles
+    while profiles.len > 0:
+      statusUpdate(monitor, pop(profiles), Wait)
+      goto home
 
-  while queue.len > 0:
-    goto box
-    let profile = pop queue
-    if result >= Skip: # prior failure; skip the remainder
-      result = Skip
-    else:              # grab a core, mark it running, and run it
-      withSemaphore cores:
-        statusUpdate(monitor, profile, Runs)
-        goto box
-        result = perform profile
-    statusUpdate(monitor, profile, result)
-  # the batch is complete; drop a thread
-  box.send nil.Continuation
+    while queue.len > 0:
+      goto home
+      let profile = pop queue
+      if result >= Skip: # prior failure; skip the remainder
+        result = Skip
+      else:              # grab a core, mark it running, and run it
+        withSemaphore cores:
+          statusUpdate(monitor, profile, Runs)
+          goto home
+          result = perform profile
+      statusUpdate(monitor, profile, result)
+  finally:
+    # the batch is complete; drop a thread
+    home.send nil.Continuation
+    # remove the cache
+    removeDir(cache, checkDir = true)
 
 const MonitorService = whelp matrixMonitor
-proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
+proc perform*(profiles: seq[Profile]) =
   ## concurrent testing of the provided profiles
   if profiles.len == 0:
-    return
+    return  # no profiles, no problem
 
   # batch the profiles according to their cache
-  var batches: Table[Hash, seq[Profile]]
+  var batches: Table[string, seq[Profile]]
   for profile in profiles.items:
-    let cache = hash(cache profile)
+    let cache = profile.cache
     if cache in batches:
       batches[cache].add profile
     else:
@@ -657,18 +701,16 @@ proc perform*(matrix: var Matrix; profiles: seq[Profile]) =
   let updates = monitor.spawn MonitorService
   defer: quit monitor
 
-  for profiles in batches.values:
+  for cache, profiles in batches.pairs:
     workers.send:
-      whelp runBatch(workers, updates, profiles)
+      whelp runBatch(workers, updates, cache, profiles)
 
   # drain the pool
   while not pool.isEmpty:
     drain pool
     if load pleaseCrash:
-      echo "QUIT1!"
       quit 1
   if load pleaseCrash:
-    echo "QUIT2!"
     quit 1
 
 proc profiles*(fn: string): seq[Profile] =
@@ -786,11 +828,5 @@ proc main*(directory: string; fallback = false) =
   for test in tests.items:
     profiles &= test.profiles
 
-  try:
-    # run the profiles
-    matrix.perform profiles
-
-  finally:
-    # remove any cache directories
-    for p in matrix.keys:
-      removeDir p.cache
+  # run the profiles
+  perform profiles
