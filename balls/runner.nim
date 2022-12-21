@@ -4,6 +4,7 @@ import std/hashes
 import std/heapqueue
 import std/lists
 import std/locks
+import std/monotimes
 import std/options
 import std/os
 import std/osproc
@@ -622,13 +623,15 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
   ## debounce status updates received from test attempts
   var matrix: Matrix
   var mail: Update
-  var dirty = false
+  var last: MonoTime
+  let old = if ci: 5000 else: 500
+  template dirty: untyped = (getMonoTime() - last).inMilliseconds > old
   while true:
     if not box.tryRecv mail:
       # there's nothing waiting; dump the matrix?
-      if dirty:
+      if dirty():
         checkpoint matrix
-        dirty = false
+        last = getMonoTime()
       mail = recv box
     if dismissed mail:
       break
@@ -642,12 +645,12 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
             setBallsResult int(matrix[p] > Part)
           pleaseCrash.store true
         else:
-          dirty = true
+          reset last
       var mail = Continuation: move mail
       # send control wherever it needs to go next
       discard trampoline mail
       wasMoved mail
-  if dirty:
+  if dirty():
     checkpoint matrix
 
 proc runBatch(home: Mailbox[Continuation]; monitor: Mailbox[Update];
