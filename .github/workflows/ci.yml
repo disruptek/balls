@@ -5,7 +5,7 @@ on:
 
   push:
     branches:
-      - v4
+      - '*'
     paths:
       - '**.cfg'
       - '**.nims'
@@ -31,14 +31,14 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest', 'macos-latest', 'ubuntu-latest']
-        nim: ['devel']
+        nim: ['version-2-0']
     name: '${{ matrix.os }} (${{ matrix.nim }})'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          path: ci
+          path: project
 
       - name: Setup Nim
         uses: alaviss/setup-nim@0.1.1
@@ -49,17 +49,16 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          cd ci
-          #nimble --accept develop
-          #nimble --accept build
+          cd project
           nimble --accept install
-          nimble test
+          balls
 
       - name: Build docs
-        if: ${{ matrix.docs }} == 'true'
+        if: >
+          matrix.os == 'ubuntu-latest' && matrix.nim == 'version-2-0'
         shell: bash
         run: |
-          cd ci
+          cd project
           branch=${{ github.ref }}
           branch=${branch##*/}
           nimble doc --project --path="." --outdir:docs \
@@ -73,9 +72,9 @@ jobs:
       - name: Publish docs
         if: >
           github.event_name == 'push' && github.ref == 'refs/heads/master' &&
-          matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
+          matrix.os == 'ubuntu-latest' && matrix.nim == 'version-2-0'
         uses: crazy-max/ghaction-github-pages@v1
         with:
-          build_dir: ci/docs
+          build_dir: project/docs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
