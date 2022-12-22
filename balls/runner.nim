@@ -303,7 +303,7 @@ if {e, js} * be != {}:
   gc.incl vm
 
 # options common to all profiles
-var defaults* = @["--panics:on", "--debugger:native", "--parallelBuild:0"]
+var defaults* = @["--panics:on", "--parallelBuild:0"]
 
 if ci:
   # force incremental off so as not to get confused by a config file
@@ -416,9 +416,9 @@ proc options*(p: Profile): seq[string] =
   if p.be == c:
     result.add "--exceptions:goto"
 
-  template installDebugInfo {.dirty.} =
-    # adjust the debugging symbols for asan/tsan builds
-    for switch in ["--debuginfo", "--debugger:native"]:
+  if p.an != Execution:
+    # adjust the debugging symbols for analysis builds
+    for switch in ["--define:useMalloc", "--debuginfo"]:
       if switch notin result:
         result.add switch
 
@@ -426,11 +426,9 @@ proc options*(p: Profile): seq[string] =
   of ASanitizer:
     result.add """--passC:"-fsanitize=address""""
     result.add """--passL:"-fsanitize=address""""
-    installDebugInfo()
   of TSanitizer:
     result.add """--passC:"-fsanitize=thread""""
     result.add """--passL:"-fsanitize=thread""""
-    installDebugInfo()
   else:
     discard
 
@@ -490,7 +488,6 @@ iterator valgrindCommandLine(p: Profile; withHints = false): seq[string] =
     block:
       # make sure the executable has been built successfully
       var compilation = p
-      compilation.an = Execution
       for compilation in compilation.compilerCommandLine(withHints = withHints):
         yield compilation
         # omit any execution from the "compiler" commandLine iterator
