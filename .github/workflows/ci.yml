@@ -55,7 +55,7 @@ jobs:
 
       - name: Build docs
         if: >
-          matrix.os == 'ubuntu-latest' && matrix.nim == 'version-2-0'
+          matrix.os == 'macos-latest' && matrix.nim == 'version-2-0'
         shell: bash
         run: |
           cd project
@@ -72,7 +72,7 @@ jobs:
       - name: Publish docs
         if: >
           github.event_name == 'push' && github.ref == 'refs/heads/master' &&
-          matrix.os == 'ubuntu-latest' && matrix.nim == 'version-2-0'
+          matrix.os == 'macos-latest' && matrix.nim == 'version-2-0'
         uses: crazy-max/ghaction-github-pages@v1
         with:
           build_dir: project/docs
