@@ -253,17 +253,18 @@ proc hints*(p: Profile; ci: bool): seq[string] =
   if ci:
     # remove spam from ci logs
     omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
-    omit.add ["ObservableStores", "UnreachableCode"]
+    omit.add ["ObservableStores", "UnreachableCode", "BareExcept"]
   for warning in omit.items:
     result.add "--warning[$#]=off" % [ warning ]
 
 let ci* = getEnv("GITHUB_ACTIONS", "false") == "true"
 # set some default matrix members (profiles)
 var opt* = {
-  debug: @["--debuginfo", "--stackTrace:on", "--excessiveStackTrace:on"],
-  release: @["--define:release", "--stackTrace:on",
-             "--excessiveStackTrace:on"],
-  danger: @["--define:danger"],
+  debug: @["--debuginfo",
+           "--stackTrace:on", "--excessiveStackTrace:on"],
+  release: @["--define:release",
+             "--stackTrace:on", "--excessiveStackTrace:on"],
+  danger: @["--define:danger"]
 }.toTable
 
 # use the optimizations specified on the command-line
@@ -290,29 +291,19 @@ if be == {}:
 # use the memory models specified on the command-line
 let specifiedMM = specifiedMemModel(parameters()).toSet
 var gc* = specifiedMM
-# and if those are omitted, we'll select a single default
+# and if those are omitted, we'll select reasonable defaults
 if gc == {}:
-  gc.incl arc
-  # danger is no longer required to pass, so this is a useful place to
-  # produce some extra warnings and test future defaults
-  if danger in opt:
-    opt[danger].add "--panics:on"
-    opt[danger].add "--experimental:strictFuncs"
   if ci:
-    gc.incl refc              # on ci, add refc
-    gc.incl markAndSweep      # on ci, add markAndSweep
-    if arc in gc:
-      gc.incl orc             # on ci, add orc if arc is available
+    gc = {arc, orc}
+  else:
+    gc = {arc}
 
 # if the nimscript or javascript backends are specified, enable the vm
 if {e, js} * be != {}:
   gc.incl vm
 
 # options common to all profiles
-var defaults* = @["""--path=".""""]  # work around early nim behavior
-
-when compileOption"threads":
-  defaults.add "--parallelBuild:0"
+var defaults* = @["--panics:on", "--debugger:native", "--parallelBuild:0"]
 
 if ci:
   # force incremental off so as not to get confused by a config file
@@ -373,8 +364,9 @@ proc attempt*(command: seq[string]): (string, int) =
     result = (output, 1)
 
 proc checkpoint*(matrix: Matrix) =
-  checkpoint:
-    "\n" & matrixTable(matrix) & "\n"
+  if matrix.len > 0:
+    checkpoint:
+      "\n" & matrixTable(matrix) & "\n"
 
 proc output*(p: Profile): string =
   ## return the output filename for the build
@@ -388,14 +380,15 @@ proc assetOptions*(p: Profile): seq[string] =
 
   # FIXME: this gets replaced with a config sniff?
 
-  # specify the nimcache directory
-  result.add "--nimCache:" & p.cache
+  if p.be != e:
+    # specify the nimcache directory
+    result.add "--nimCache:" & p.cache
 
-  # specify the output filename
-  result.add "--out:" & p.output
+    # specify the output filename
+    result.add "--out:" & p.output
 
-  # use the nimcache for our output directory
-  result.add "--outDir:" & p.cache
+    # use the nimcache for our output directory
+    result.add "--outDir:" & p.cache
 
 proc options*(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
@@ -418,13 +411,6 @@ proc options*(p: Profile): seq[string] =
   if p.be == js:
     # add --define:nodejs on js backend so that getCurrentDir() works
     result.add "--define:nodejs"
-
-  when false:
-    # nimscript doesn't use a --run
-    if p.be != e:
-      # don't run compile-only tests
-      if not result.parameter "--compileOnly":
-        result.add "--run"
 
   # use goto exceptions only in c
   if p.be == c:
@@ -487,17 +473,16 @@ iterator compilerCommandLine(p: Profile; withHints = false): seq[string] =
 
   result.add p.fn                     # add the filename for c+p reasons
 
-  yield result                        # yield the compilation command
-
   if not p.options.parameter("--compileOnly"):
-    # invoke the output
     case p.be
     of js:
-      yield @[findExe"node", p.cache / p.output]
+      yield result                                 # compile to output
+      yield @[findExe"node", p.cache / p.output]   # invoke the output
     of e:
-      yield @[nimExecutable, "e", p.fn]
+      yield result                                 # invoke the source
     else:
-      yield @[p.cache / p.output]
+      yield result                                 # compile to output
+      yield @[p.cache / p.output]                  # invoke the output
 
 iterator valgrindCommandLine(p: Profile; withHints = false): seq[string] =
   ## compose the interesting parts of the valgrind invocation
@@ -512,28 +497,28 @@ iterator valgrindCommandLine(p: Profile; withHints = false): seq[string] =
         break
       compilation.cache / compilation.output
 
-  var result = @[valgrindExecutable]
-  result.add: "--error-exitcode=255"  # for zevv
-  result.add: "--tool=" & (if p.an == DataRacer: "drd" else: $p.an)
-  case p.an
-  of Valgrind:
-    result.add: ["--leak-check=full", "--show-leak-kinds=all"]
-    result.add: ["--track-origins=yes", "--max-threads=50000"]
-  of Helgrind:
-    result.add: ["--max-threads=50000"]
-  of DataRacer:
-    result.add: ["--first-race-only=yes", "--join-list-vol=50000"]
-    result.add: ["--report-signal-unlocked=no"]
-  else:
-    discard
-  let userFlags = getEnv"BALLS_VALGRIND_FLAGS"
-  if userFlags != "":
-    result.add: userFlags
-  result.add: executable
-  yield result
+  if not p.options.parameter("--compileOnly"):
+    var result = @[valgrindExecutable]
+    result.add: "--error-exitcode=255"  # for zevv
+    result.add: "--tool=" & (if p.an == DataRacer: "drd" else: $p.an)
+    case p.an
+    of Valgrind:
+      result.add: ["--leak-check=full", "--show-leak-kinds=all"]
+      result.add: ["--track-origins=yes", "--max-threads=50000"]
+    of Helgrind:
+      result.add: ["--max-threads=50000"]
+    of DataRacer:
+      result.add: ["--first-race-only=yes", "--join-list-vol=50000"]
+      result.add: ["--report-signal-unlocked=no"]
+    else:
+      discard
+    let userFlags = getEnv"BALLS_VALGRIND_FLAGS"
+    if userFlags != "":
+      result.add: userFlags
+    result.add: executable
+    yield result
 
-iterator commandLine*(p: Profile;
-                      withHints = false, withCache = false): seq[string] =
+iterator commandLine*(p: Profile; withHints = false): seq[string] =
   ## compose the interesting parts of the process invocations
   case p.an
   of anCompilerInvocation:
@@ -681,7 +666,7 @@ proc runBatch(home: Mailbox[Continuation]; monitor: Mailbox[Update];
     # the batch is complete; drop a thread
     home.send nil.Continuation
     # remove the cache
-    removeDir(cache, checkDir = true)
+    removeDir cache
 
 const MonitorService = whelp matrixMonitor
 proc perform*(profiles: seq[Profile]) =
