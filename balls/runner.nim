@@ -626,7 +626,7 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
           when false:
             setBallsResult int(matrix[p] > Part)
           pleaseCrash.store true
-        else:
+        elif not pleaseCrash.load:
           reset last
       var mail = Continuation: move mail
       # send control wherever it needs to go next
