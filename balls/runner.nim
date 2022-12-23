@@ -319,17 +319,8 @@ var defaults = @["""--path=".""""]  # work around early nim behavior
 when compileOption"threads":
   defaults.add "--parallelBuild:1"
 
-if (NimMajor, NimMinor) >= (1, 8):
-  # always use IC if it's available
-  defaults.add "--incremental:on"
-elif ci:
-  # otherwise, force rebuild only on CI
-  if not compileOption"threads":
-    # and only outside threads
-    defaults.add "--forceBuild:on"
-  when (NimMajor, NimMinor) >= (1, 5):
-    # force incremental off so as not to get confused by a config file
-    defaults.add "--incremental:off"
+if (NimMajor, NimMinor) >= (1, 5):
+  defaults.add "--incremental:off"
 
 proc cache(p: Profile): string =
   ## come up with a unique cache directory according to where you'd like
