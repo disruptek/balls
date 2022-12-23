@@ -303,11 +303,7 @@ if {e, js} * be != {}:
   gc.incl vm
 
 # options common to all profiles
-var defaults* = @["--panics:on", "--parallelBuild:0"]
-
-if ci:
-  # force incremental off so as not to get confused by a config file
-  defaults.add "--incremental:off"
+var defaults* = @["--incremental:off", "--panics:on", "--parallelBuild:0"]
 
 proc cache*(p: Profile): string =
   ## come up with a unique cache directory according to where you'd like
