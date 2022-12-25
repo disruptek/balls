@@ -652,7 +652,11 @@ proc wrapExcept(t: var Test): NimNode =
   var skipping = bindSym"SkipError"
   var failing = bindSym"FailError"
   var assertion = bindSym"AssertionDefect"
-  var catchall = bindSym"Exception"
+  var catchall =
+    when compiles(CatchableError):
+      bindSym"CatchableError"
+    else:
+      bindSym"Exception"
   var e1 {.used.} = genSym(nskLet, "e")
   var e2 {.used.} = genSym(nskLet, "e")
   var e3 {.used.} = genSym(nskLet, "e")
