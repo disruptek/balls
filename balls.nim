@@ -7,14 +7,16 @@ from std/unicode import align, alignLeft
 import std/macros
 import std/colors
 
-import grok
-import grok/mem
-import grok/time
-import grok/kute
-import ups/sanitize
+import pkg/grok
+import pkg/grok/mem
+import pkg/grok/time
+import pkg/grok/kute
+import pkg/ups/sanitize
 
 import balls/spec
 import balls/style
+
+export FailError, ExpectedError, SkipError
 
 type
   Rewrite = proc(n: NimNode): NimNode
