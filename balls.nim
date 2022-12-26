@@ -16,6 +16,8 @@ import ups/sanitize
 import balls/spec
 import balls/style
 
+export FailError, SkipError, ExpectedError
+
 type
   Rewrite = proc(n: NimNode): NimNode
 
