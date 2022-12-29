@@ -40,7 +40,8 @@ allow subsequent tests to get executed, but only outside of `--define:release`.
 
 You can now run `balls` to run a limited local test matrix against the current
 compiler -- the matrix is expanded automatically on GitHub Actions CI. This
-runtime will try to guess how to test your project regardless of its structure, but you can help narrow what it chooses to compile by...
+runtime will try to guess how to test your project regardless of its structure,
+but you can help narrow what it chooses to compile by...
 
 - placing files matching `t*.nim` under a `tests` subdirectory, or
 - having a single file `foo.nim` in your `foo` project, or
@@ -63,6 +64,30 @@ You can specify memory models with which to restrict the test matrix:
 $ balls --gc:arc --gc:orc
 # ... tests are run only with --gc:arc and --gc:orc ...
 ```
+
+You can similarly constrain backends and optimizations:
+```
+$ balls --backend:c --define:danger
+# ... tests are run only with the c backend, and danger optimizations ...
+```
+
+By default, failing tests that are expected to pass will cause
+early termination of the test runner, skipping any remaining test
+invocations. You can disable this behavior by building `balls` with
+`--define:ballsFailFast:off`.
+
+## Valgrind and Sanitizers
+
+When `--define:danger` test builds are part of the matrix, we will also attempt
+valgrind runs against the tests to check for memory errors and races. If
+`valgrind` is not found in the path, we will attempt to use the compiler's
+sanitizer library instead.
+
+You can add arguments to the valgrind invocations by setting the
+`BALLS_VALGRIND_FLAGS` variable in the environment.
+
+To explicitly disable valgrind in favor of the compiler's sanitizers, build
+the `balls` executable with `--define:ballsUseValgrind:off`.
 
 ## Test Library Usage
 
