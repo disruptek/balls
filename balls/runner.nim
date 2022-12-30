@@ -624,10 +624,8 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
           pleaseCrash.store true
         elif not pleaseCrash.load:
           reset last
-      var mail = Continuation: move mail
       # send control wherever it needs to go next
-      discard trampoline mail
-      wasMoved mail
+      discard trampoline(Continuation move mail)
   if dirty():
     checkpoint matrix
 
