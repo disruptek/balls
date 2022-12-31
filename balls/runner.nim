@@ -522,7 +522,8 @@ iterator commandLine*(p: Profile; withHints = false): seq[string] =
       yield command
 
 var cores: Semaphore
-initSemaphore(cores, countProcessors())
+initSemaphore cores:
+  parseInt getEnv("BALLS_CORES", $countProcessors())
 var pleaseCrash: Atomic[bool]
 
 proc perform*(p: Profile): StatusKind =

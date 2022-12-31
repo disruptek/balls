@@ -76,6 +76,9 @@ early termination of the test runner, skipping any remaining test
 invocations. You can disable this behavior by building `balls` with
 `--define:ballsFailFast:off`.
 
+Set `BALLS_CORES` to a positive integer to constrain compilation and test
+execution to a certain amount of concurrency.
+
 ## Valgrind and Sanitizers
 
 When `--define:danger` test builds are part of the matrix, we will also attempt
