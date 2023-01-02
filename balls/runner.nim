@@ -596,7 +596,7 @@ proc setup(c: Update; p: Profile; s: StatusKind): Update {.cpsMagic.} =
 proc statusUpdate(monitor: Mailbox[Update]; profile: Profile;
                   status: StatusKind) {.cps: Update.} =
   setup profile, status
-  goto monitor
+  comeFrom monitor
 
 proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
   ## debounce status updates received from test attempts
@@ -641,17 +641,14 @@ proc runBatch(home: Mailbox[Continuation]; monitor: Mailbox[Update];
     var profiles = profiles
     while profiles.len > 0:
       statusUpdate(monitor, pop(profiles), Wait)
-      goto home
 
     while queue.len > 0:
-      goto home
       let profile = pop queue
       if result >= Skip: # prior failure; skip the remainder
         result = Skip
       else:              # grab a core, mark it running, and run it
         withSemaphore cores:
           statusUpdate(monitor, profile, Runs)
-          goto home
           result = perform profile
       statusUpdate(monitor, profile, result)
   finally:
