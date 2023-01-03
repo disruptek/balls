@@ -93,7 +93,7 @@ proc shortPath(fn: string): string =
   fn.parentDir.lastPathPart / fn.short
 
 proc `$`(p: Profile): string =
-  "$#: $# $# $#" % [ short p.fn, $p.be, $p.gc, $p.opt ]
+  "$#: $# $# $# $#" % [ short p.fn, $p.be, $p.gc, $p.opt, $p.an ]
 
 template cmper(f: untyped) {.dirty.} =
   result = system.cmp(a.`f`, b.`f`)
@@ -609,8 +609,10 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
     if not box.tryRecv mail:
       # there's nothing waiting; dump the matrix?
       if dirty():
-        checkpoint matrix
-        last = getMonoTime()
+        # dump matrix updates only outside ci
+        if not ci:
+          checkpoint matrix
+          last = getMonoTime()
       mail = recv box
     if dismissed mail:
       break
@@ -625,6 +627,9 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
           pleaseCrash.store true
         elif not pleaseCrash.load:
           reset last
+        if ci:
+          # in ci, show some matrix progress
+          checkpoint "$# $#" % [$mail.status, $mail.profile]
       # send control wherever it needs to go next
       discard trampoline(Continuation move mail)
   if dirty():
