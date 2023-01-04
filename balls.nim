@@ -655,10 +655,10 @@ proc wrapExcept(t: var Test): NimNode =
   var failing = bindSym"FailError"
   var assertion = bindSym"AssertionDefect"
   var catchall = bindSym"CatchableError"
-  var e1 {.used.} = genSym(nskLet, "e")
-  var e2 {.used.} = genSym(nskLet, "e")
-  var e3 {.used.} = genSym(nskLet, "e")
-  var e4 {.used.} = genSym(nskLet, "e")
+  var e1 {.used.} = genSym(nskLet, "skippedErr")
+  var e2 {.used.} = genSym(nskLet, "badAssertErr")
+  var e3 {.used.} = genSym(nskLet, "catchableErr")
+  var e4 {.used.} = genSym(nskLet, "failureErr")
   result =
     nnkTryStmt.newTreeFrom t.code:
       # the body of the try statement is the instrumented test
