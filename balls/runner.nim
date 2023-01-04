@@ -450,13 +450,18 @@ proc nonsensical*(p: Profile): bool =
     true
   elif p.an != Execution and p.gc notin {arc, orc}:
     true
+  elif p.an != Execution and p.options.parameter("--compileOnly"):
+    true
   else:
     false
 
 iterator compilerCommandLine(p: Profile; withHints = false): seq[string] =
   ## compose the interesting parts of the compiler invocation
   var result = @[nimExecutable]
-  result.add $p.be                    # add the backend, eg. `c`, `js`, `e`
+  if p.be == e and p.options.parameter("--compileOnly"):
+    result.add "check"                # we can only "check" the VM backend
+  else:
+    result.add $p.be                  # add the backend, eg. `c`, `js`, `e`
   result.add p.options                # add other options for this profile
 
   if withHints:                       # toggled so we can omit in an echo
@@ -467,15 +472,15 @@ iterator compilerCommandLine(p: Profile; withHints = false): seq[string] =
 
   result.add p.fn                     # add the filename for c+p reasons
 
+  yield result                        # run the compiler against the input
+
   if not p.options.parameter("--compileOnly"):
     case p.be
     of js:
-      yield result                                 # compile to output
       yield @[findExe"node", p.cache / p.output]   # invoke the output
     of e:
-      yield result                                 # invoke the source
+      discard                                      # (already consumed)
     else:
-      yield result                                 # compile to output
       yield @[p.cache / p.output]                  # invoke the output
 
 iterator valgrindCommandLine(p: Profile; withHints = false): seq[string] =
