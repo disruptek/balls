@@ -76,7 +76,7 @@ jobs:
           balls --path="." --backend:e --backend:js --backend:cpp --backend:c
 
       - name: Build docs
-        if: matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
+        if: matrix.os == 'ubuntu-latest' && matrix.nim == 'unsupported'
         shell: bash
         run: |
           cd project
@@ -93,7 +93,7 @@ jobs:
       - name: Publish docs
         if: >
           github.event_name == 'push' && github.ref == 'refs/heads/master' &&
-          matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
+          matrix.os == 'ubuntu-latest' && matrix.nim == 'unsupported'
         uses: crazy-max/ghaction-github-pages@v1
         with:
           build_dir: project/docs
