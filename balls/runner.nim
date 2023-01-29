@@ -430,7 +430,8 @@ proc options*(p: Profile): seq[string] =
 
 let nimExecutable = findExe"nim"
 let valgrindExecutable = findExe"valgrind"
-let useValgrind = ballsUseValgrind and "" != valgrindExecutable
+let useValgrind = "" != valgrindExecutable and
+  parseBool(getEnv("BALLS_VALGRIND", $ballsUseValgrind))
 
 proc nonsensical*(p: Profile): bool =
   ## certain profiles need not be attempted
