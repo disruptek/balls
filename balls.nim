@@ -33,9 +33,11 @@ const
     nnkConverterDef, nnkTemplateDef, nnkFuncDef, nnkMacroDef, nnkCommand,
     nnkCall
   }
+  auditTimeSpace = defined(danger) and not defined(nimscript)
 
-var clock: float          # pre-test time
-var memory: int           # pre-test memory
+when auditTimeSpace:
+  var clock: float          # pre-test time
+  var memory: int           # pre-test memory
 
 proc rewrite(n: NimNode; r: Rewrite): NimNode =
   ## perform a recursive rewrite (at least once) using the given mutator
@@ -119,7 +121,15 @@ proc comment(n: NimNode): NimNode =
   ## render a comment with the given stringish node
   infix(lineNumStyle & newLit"## ", "&", n)
 
-var testResults = newSeq[int](1 + ord(high StatusKind))  # result totals
+# result totals whatfer legend depiction
+proc newtestResults(): seq[int] {.compileTime.} =
+  newSeq[int](1 + ord(high StatusKind))
+
+# silly, i know
+when defined(nimscript):
+  var testResults {.compileTime.} = newTestResults()
+else:
+  var testResults = newTestResults()
 
 proc incResults(test: Test): NimNode =
   newCall ident"inc":
@@ -162,7 +172,7 @@ proc numberLines(s: string; first = 1): NimNode =
 proc checkpoint*(ss: varargs[string, `$`]) =
   ## Like `echo`, but outputs to `stdmsg()` with the other test output.
   noclobber:
-    when defined(js):
+    when defined(js) or defined(nimscript):
       echo ss.join(" ")
     else:
       stdmsg().writeLine ss.join(" ")
@@ -407,7 +417,7 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
   ## output the stack trace of a test, and perhaps that of any exception
-  when defined(js):
+  when defined(js) or defined(nimscript):
     result = newEmptyNode()
   else:
     var renderStack = bindSym"renderStack"
@@ -590,7 +600,7 @@ proc postTest(test: Test): NimNode =
   result = newStmtList:
     newVarStmt(temp, ctor test)
 
-  when defined(danger):
+  when auditTimeSpace:
     let tempClock = newDotExpr(temp, ident"clock")
     let tempMem = newDotExpr(temp, ident"memory")
 
@@ -698,16 +708,17 @@ proc makeTest(n: NimNode; name: string): Test =
     result.node.add:
       success result
 
-    # make note of the global clock time at the beginning of the test
-    insert result.node, 0:
-      bindSym"clock".newAssignment:      # clock =
-        bindSym"epochTime".newCall       # epochTime()
+    when auditTimeSpace:
+      # make note of the global clock time at the beginning of the test
+      insert result.node, 0:
+        bindSym"clock".newAssignment:      # clock =
+          bindSym"epochTime".newCall       # epochTime()
 
-    # but first perform a garbage collection or whatever, so our memory
-    # figures might be kinda sorta useful, and store memory use globally
-    insert result.node, 0:
-      bindSym"memory".newAssignment:              # memory =
-        bindSym"quiesceMemory".newCall newLit""   # quiesceMemory("")
+      # but first perform a garbage collection or whatever, so our memory
+      # figures might be kinda sorta useful, and store memory use globally
+      insert result.node, 0:
+        bindSym"memory".newAssignment:              # memory =
+          bindSym"quiesceMemory".newCall newLit""   # quiesceMemory("")
 
     # and before you do that, run the setup clause
     insert result.node, 0:

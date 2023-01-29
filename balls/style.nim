@@ -14,12 +14,11 @@ proc `&`*(a: string; b: Styling): Styling = b & a
 
 {.push hint[ConvFromXtoItselfNotNeeded]: off.}
 
-when defined(js):
+when defined(js) or defined(nimscript):
   template ansiStyleCode(x: untyped): string = ""
   template ansiForegroundColorCode(x: untyped; bool = true): string = ""
   template ansiBackgroundColorCode(x: untyped; bool = true): string = ""
-  const
-    ansiResetCode = ""
+  const ansiResetCode = ""
 else:
   import std/terminal
 
@@ -74,7 +73,7 @@ when defined(danger): # avoid unused warnings
 {.pop.}
 
 let colorThisRun {.used.}: bool =
-  when defined(js):
+  when defined(js) or defined(nimscript):
     onCI
   else:
     onCI or stdmsg().isAtty
