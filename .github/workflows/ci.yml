@@ -73,7 +73,7 @@ jobs:
         run: |
           cd project
           nimble --accept install
-          balls --path="."
+          balls --path="." --backend:e --backend:js --backend:cpp --backend:c
 
       - name: Build docs
         if: matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
