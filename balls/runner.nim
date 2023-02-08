@@ -22,7 +22,6 @@ import pkg/ups/config
 import pkg/ups/paths
 
 import balls/spec
-import balls/semaphores
 import balls/style
 import balls/tabouli
 import balls
@@ -527,10 +526,8 @@ iterator commandLine*(p: Profile; withHints = false): seq[string] =
     for command in p.valgrindCommandLine(withHints = withHints):
       yield command
 
-var cores: Semaphore
-initSemaphore cores:
-  parseInt getEnv("BALLS_CORES", $countProcessors())
 var pleaseCrash: Atomic[bool]
+let availableProcessors = parseInt getEnv("BALLS_CORES", $countProcessors())
 
 proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
@@ -654,19 +651,16 @@ proc runBatch(home: Mailbox[Continuation]; monitor: Mailbox[Update];
       statusUpdate(monitor, pop(profiles), Wait)
 
     while queue.len > 0:
-      let profile = pop queue
-      if result >= Skip: # prior failure; skip the remainder
-        result = Skip
-      else:              # grab a core, mark it running, and run it
-        withSemaphore cores:
-          statusUpdate(monitor, profile, Runs)
-          result = perform profile
-      statusUpdate(monitor, profile, result)
+      let profile = pop queue                     # get a test to run
+      result =
+        if result >= Skip:                        # prior failure?
+          Skip                                    # skip the remainder
+        else:
+          statusUpdate(monitor, profile, Runs)    # mark it running
+          perform profile                         # perform the test
+      statusUpdate(monitor, profile, result)      # record the status
   finally:
-    # the batch is complete; drop a thread
-    home.send nil.Continuation
-    # remove the cache
-    removeDir cache
+    removeDir cache                               # remove the cache
 
 const MonitorService = whelp matrixMonitor
 proc perform*(profiles: seq[Profile]) =
@@ -685,7 +679,7 @@ proc perform*(profiles: seq[Profile]) =
 
   # make a pool of workers and send them the batches
   var workers = newMailbox[Continuation]()
-  var pool = newPool(ContinuationWaiter, workers, batches.len)
+  var pool = newPool(ContinuationWaiter, workers, availableProcessors)
 
   # setup a debouncing matrix monitor
   var monitor: Runtime[Continuation, Update]
@@ -695,6 +689,10 @@ proc perform*(profiles: seq[Profile]) =
   for cache, profiles in batches.pairs:
     workers.send:
       whelp runBatch(workers, updates, cache, profiles)
+
+  # shut down the runtimes as they complete the work
+  for runtime in 1..pool.count:
+    workers.send nil.Continuation
 
   # drain the pool
   while not pool.isEmpty:
