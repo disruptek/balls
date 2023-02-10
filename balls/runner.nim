@@ -697,11 +697,9 @@ proc perform*(profiles: seq[Profile]) =
     workers.send nil.Continuation
 
   # drain the pool
-  while not pool.isEmpty:
+  while not pool.isEmpty and not pleaseCrash.load:
     drain pool
-    if load pleaseCrash:
-      quit 1
-  if load pleaseCrash:
+  if pleaseCrash.load:
     quit 1
 
 proc profiles*(fn: string): seq[Profile] =
