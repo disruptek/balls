@@ -631,8 +631,10 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
         elif not pleaseCrash.load:
           reset last
         if ci:
-          # in ci, show some matrix progress
-          checkpoint "$# $#" % [$mail.status, $mail.profile]
+          # in ci, if the status is notable or we're not crashing,
+          if not pleaseCrash.load or mail.status notin {Skip, Runs}:
+            # show some matrix progress in case someone is watching
+            checkpoint "$# $#" % [$mail.status, $mail.profile]
       # send control wherever it needs to go next
       discard trampoline(Continuation move mail)
   if dirty():
