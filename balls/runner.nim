@@ -680,12 +680,12 @@ proc perform*(profiles: seq[Profile]) =
       batches[cache] = @[profile]
 
   # make a pool of workers and send them the batches
-  var workers = newMailbox[Continuation]()
+  let workers = newMailbox[Continuation]()
+  let updates = newMailbox[Update]()
   var pool = newPool(ContinuationWaiter, workers, availableProcessors)
 
   # setup a debouncing matrix monitor
-  var monitor: Runtime[Continuation, Update]
-  let updates = monitor.spawn MonitorService
+  var monitor = MonitorService.spawn(updates)
   defer: quit monitor
 
   for cache, profiles in batches.pairs:
