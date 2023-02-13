@@ -499,12 +499,13 @@ iterator valgrindCommandLine(p: Profile; withHints = false): seq[string] =
     var result = @[valgrindExecutable]
     result.add: "--error-exitcode=255"  # for zevv
     result.add: "--tool=" & (if p.an == DataRacer: "drd" else: $p.an)
+    result.add: "--max-threads=50000"
     case p.an
     of Valgrind:
       result.add: ["--leak-check=full", "--show-leak-kinds=all"]
-      result.add: ["--track-origins=yes", "--max-threads=50000"]
+      result.add: ["--track-origins=yes"]
     of Helgrind:
-      result.add: ["--max-threads=50000"]
+      discard
     of DataRacer:
       result.add: ["--first-race-only=yes", "--join-list-vol=50000"]
       result.add: ["--report-signal-unlocked=no"]

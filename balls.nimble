@@ -1,4 +1,4 @@
-version = "4.0.16"
+version = "4.0.17"
 author = "disruptek"
 description = "a unittest framework with balls 🔴🟡🟢"
 license = "MIT"
@@ -12,12 +12,6 @@ bin = @["balls"]            # build the binary for basic test running
 installExt = @["nim"]       # we need to install balls.nim also
 skipDirs = @["tests"]       # so stupid...  who doesn't want tests?
 #installFiles = @["balls.nim"] # https://github.com/nim-lang/Nim/issues/16661
-
-task test, "run tests for ci":
-  when defined(windows):
-    exec "balls.cmd"
-  else:
-    exec "balls"
 
 task demo, "produce a demo":
   exec "nim c --gc:arc --define:release balls.nim"
