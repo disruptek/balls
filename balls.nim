@@ -8,7 +8,6 @@ import std/macros
 import std/colors
 
 import pkg/grok
-import pkg/grok/mem
 import pkg/grok/time
 import pkg/grok/kute
 import pkg/ups/sanitize
@@ -33,9 +32,8 @@ const
     nnkConverterDef, nnkTemplateDef, nnkFuncDef, nnkMacroDef, nnkCommand,
     nnkCall
   }
-  auditTimeSpace = defined(danger) and not defined(nimscript)
 
-when auditTimeSpace:
+when ballsAuditTimeSpace:
   var clock: float          # pre-test time
   var memory: int           # pre-test memory
 
@@ -600,7 +598,7 @@ proc postTest(test: Test): NimNode =
   result = newStmtList:
     newVarStmt(temp, ctor test)
 
-  when auditTimeSpace:
+  when ballsAuditTimeSpace:
     let tempClock = newDotExpr(temp, ident"clock")
     let tempMem = newDotExpr(temp, ident"memory")
 
@@ -708,7 +706,7 @@ proc makeTest(n: NimNode; name: string): Test =
     result.node.add:
       success result
 
-    when auditTimeSpace:
+    when ballsAuditTimeSpace:
       # make note of the global clock time at the beginning of the test
       insert result.node, 0:
         bindSym"clock".newAssignment:      # clock =

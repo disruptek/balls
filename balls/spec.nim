@@ -4,10 +4,13 @@ import std/os
 
 import grok
 
-when defined(danger):
-  import grok/mem # for quiesceMemory()
-  # zero-cost cause the symbol to be ".used."
-  assert quiesceMemory is proc(message: string): int
+const
+  ballsAuditTimeSpace* {.booldefine.} =
+    defined(danger) and not defined(nimscript)
+
+when ballsAuditTimeSpace:
+  import grok/mem
+  export quiesceMemory
 
 # critically, if we ever indicated a failure,
 # don't obscure that failure with a subsequent success
