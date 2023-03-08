@@ -259,10 +259,10 @@ proc hints*(p: Profile; ci: bool): seq[string] =
 let ci* = getEnv("GITHUB_ACTIONS", "false") == "true"
 # set some default matrix members (profiles)
 var opt* = {
-  debug: @["--debuginfo",
-           "--stackTrace:on", "--excessiveStackTrace:on"],
+  debug: @["--debuginfo:on",
+           "--lineTrace:on", "--stackTrace:on", "--excessiveStackTrace:on"],
   release: @["--define:release",
-             "--stackTrace:on", "--excessiveStackTrace:on"],
+             "--lineTrace:on", "--stackTrace:on", "--excessiveStackTrace:on"],
   danger: @["--define:danger"]
 }.toTable
 
