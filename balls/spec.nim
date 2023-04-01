@@ -12,41 +12,6 @@ when ballsAuditTimeSpace:
   import grok/mem
   export quiesceMemory
 
-# critically, if we ever indicated a failure,
-# don't obscure that failure with a subsequent success
-
-when defined(js):
-  # import the process.exitCode from javascript
-  var exitCode {.importjs: "process.$1".}: cint
-  # we may as well also import the process.exit()
-  proc processExit(code: cint = 0) {.importjs: "process.$1(#)".}
-  proc setBallsResult(q: int) =
-    # set the process.exitCode
-    exitCode = max(exitCode, cint q)
-  # this will be available only in javascript
-  export processExit
-elif defined(nimscript):
-  # nimscript's implementation
-  proc setBallsResult(q: int) =
-    programResult = max(programResult, q)
-  proc addExitProc(p: proc() {.noconv.}) = addQuitProc p
-  export addExitProc
-else:
-  when (NimMajor, NimMinor) >= (1, 3):
-    # this is our ideal
-    import std/exitprocs
-    proc setBallsResult(q: int) =
-      setProgramResult:
-        max(getProgramResult(), q)
-  else:
-    proc setBallsResult(q: int) =
-      programResult = max(programResult, q)
-    proc addExitProc(p: proc() {.noconv.}) = addQuitProc p
-  # this will be available only inside the c/cpp backends
-  export addExitProc
-# make sure we definitely have this symbol on all backends
-export setBallsResult
-
 const hasPanics* =
   # panics were introduced in 1.1.1 ...
   # when (NimMajor, NimMinor, NimPatch) >= (1, 1, 1):

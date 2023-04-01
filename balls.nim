@@ -1,11 +1,12 @@
+import std/colors
+import std/genasts
+import std/macros
 import std/options
-import std/times
 import std/os
 import std/sequtils
 import std/strutils except align, alignLeft
+import std/times
 from std/unicode import align, alignLeft
-import std/macros
-import std/colors
 
 import pkg/grok
 import pkg/grok/time
@@ -435,17 +436,27 @@ proc renderSource(t: Test): NimNode =
       node[0] = newCommentStmtNode(dropFirst)
   result = t.output(repr(node).numberLines(info.line).prefixLines emojiSource)
 
-proc setExitCode(t: Test; code = QuitFailure): NimNode =
-  let setResult = bindSym"setBallsResult"
-  when false:
-    let isAtty = bindSym"isAtty"
-    # if not isAtty(stderr): setResult(code)
-    result = newIfStmt((prefix(newCall(isAtty, ident"stderr"), "not"),
-                        newCall(setResult, code.newLit)))
-  else:
-    # because the test runner needs to measure success using exit code,
-    # we need to exit with a code regardless of tty condition
-    result = newCall(setResult, code.newLit)
+when defined(nimscript):
+  # under nimscript, we don't have a good way to enqueue a result code
+  proc setExitCode(t: Test; code = QuitFailure): NimNode =
+    let warning =
+      t.output: newLit"(balls exits on first failure under nimscript)"
+    genAstOpt({}, warning, code):
+      if code != QuitSuccess:
+        warning
+        quit code
+elif defined(js):
+  # we don't actually call the exit routine...
+  # proc processExit(code: cint = 0) {.importjs: "process.exit(#)".}
+  var exitCode {.importjs: "process.$1".}: cint
+  proc setExitCode(t: Test; code = QuitFailure): NimNode =
+    newAssignment(bindSym"exitCode", code.newLit)
+else:
+  # other backends use the modern get|set-ProgramResult routines
+  import std/exitprocs
+  proc setExitCode(t: Test; code = QuitFailure): NimNode =
+    genAstOpt({}, code):
+      setProgramResult max(code, getProgramResult())
 
 proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
   ## what to do when a test fails
