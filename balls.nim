@@ -68,7 +68,7 @@ proc combineLiterals(n: NimNode): NimNode =
         # cheating here
         if {n[0].kind, n[1].kind} == {nnkElifBranch, nnkElse}:
           if n[0].len == 2:
-            if {n[0][0].len, n[1].len} == {1}:
+            if n[0][0].len == 1 and n[1].len == 1:
               if n[0][0].kind == nnkCall:
                 if n[0][0][0].kind == nnkSym:
                   if n[0][0][0].strVal == "useColor":
