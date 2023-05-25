@@ -59,10 +59,6 @@ proc filter(n: NimNode; f: Rewrite): NimNode =
       result.add filter(kid, f)
   result = n
 
-proc comment(n: NimNode): NimNode =
-  ## render a comment with the given stringish node
-  infix(lineNumStyle & newLit"## ", "&", n)
-
 # result totals whatfer legend depiction
 proc newtestResults(): seq[int] {.compileTime.} =
   newSeq[int](1 + ord(high StatusKind))
@@ -112,37 +108,6 @@ proc niceKind(n: NimNode): NimNode =
   expectKind(n, nnkSym)
   let kind = $n.symKind
   result = newLit toLowerAscii(kind[3..^1])
-
-proc localPath(fn: string): string =
-  ## a somewhat verbose impl due to necessity
-  when nimvm:
-    when (NimMajor, NimMinor) == (1, 4):
-      result = fn
-    else:
-      result = relativePath(fn, getProjectPath())
-  else:
-    when defined(js):
-      block:
-        when (NimMajor, NimMinor) >= (1, 4):
-          try:
-            result = relativePath(fn, getCurrentDir())
-            break
-          except ValueError:
-            # "specified root is not absolute"; cwd probably unavailable
-            discard
-        result = relativePath(fn, getProjectPath())
-    else:
-      result = relativePath(fn, getCurrentDir())
-
-proc renderFilename(s: LineInfo): string =
-  "$1$3$2$1" % [ $resetStyle,
-                 localPath($s.filename),
-                 $viaFileStyle ]
-
-proc renderFilenameAndLine(s: LineInfo): string =
-  "$1$2$3$1$4 line $5$1" % [ $resetStyle,
-                 $viaFileStyle, localPath($s.filename),
-                 $commentStyle, $s.line ]
 
 proc renderFilename(s: StackTraceEntry): string =
   renderFilename LineInfo(filename: $s.filename, line: s.line)
@@ -291,7 +256,10 @@ proc fromFileGetLine(file: string; line: int): string =
   else:
     if file.fileExists:
       let lines = toSeq lines(file)
-      result = lines[line - 1]
+      if line - 1 < lines.high:
+        result = lines[line - 1]
+      else:
+        result = "(line not found)"
     else:
       #result = "(not found: $#)" % [ file ]
       result = "(file not found)"
@@ -312,8 +280,8 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
       result.add renderFilename(s)
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
-    result.add "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle,
-      line, code, $s.procname, $lineNumStyle, $sourceStyle, $viaProcStyle ]
+    result.add:
+      renderStackEntry(s, line, code)
   checkpoint result.join("\n").prefixLines prefix & emojiStack
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =

@@ -1,4 +1,4 @@
-import std/colors
+import std/genasts
 import std/macros
 import std/strutils
 
@@ -10,49 +10,70 @@ type
   Styling* = distinct string
 
 proc `&`*(a, b: Styling): Styling {.borrow.}
-proc `&`*(a: Styling; b: string): Styling = a & Styling(b)
-proc `&`*(a: string; b: Styling): Styling = b & a
 
 {.push hint[ConvFromXtoItselfNotNeeded]: off.}
 
-when defined(js) or defined(nimscript):
-  template ansiStyleCode(x: untyped): string = ""
-  template ansiForegroundColorCode(x: untyped; bool = true): string = ""
-  template ansiBackgroundColorCode(x: untyped; bool = true): string = ""
-  const ansiResetCode = ""
+# the idea here is to reduce the amount of ast generated in the event we
+# can determine at compile-time that color will/won't be used...
+
+when ballsDry:
+  const useColor* = false
+  const dynamicColor* = false
+elif defined(js) or defined(nimscript):
+  const useColor* = false
+  const dynamicColor* = false
 else:
   import std/terminal
+  when onCI:
+    # CI is always safe to color
+    const useColor* = true
+    const dynamicColor* = false
+  else:
+    when compiles(stdmsg().isAtty):
+      let useColor* = stdmsg().isAtty
+      const dynamicColor* = true
+    else:
+      let useColor* = true
+      const dynamicColor* = false
+
+when not dynamicColor:
+  when not useColor:
+    # shim defines from terminal...
+    template ansiStyleCode(x: untyped): string = ""
+    template ansiForegroundColorCode(x: untyped; bool = true): string = ""
+    template ansiBackgroundColorCode(x: untyped; bool = true): string = ""
+    const ansiResetCode = ""
 
 const
-  resetStyle*      = Styling ansiResetCode
-  resultsStyle*    = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiForegroundColorCode(fgWhite, true)
-  informStyle*     = Styling ansiForegroundColorCode(fgBlue, true)
-  commentStyle*    = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiForegroundColorCode(fgWhite, true)
-  lineNumStyle*    = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiForegroundColorCode(fgBlack, true)
-  partialStyle*    = Styling ansiForegroundColorCode(fgYellow, true)
-  successStyle*    = Styling ansiForegroundColorCode(fgGreen)
-  oopsStyle*       = Styling ansiStyleCode(styleBright) &
-                     Styling ansiStyleCode(styleReverse) &
-                     Styling ansiBackgroundColorCode(Color(0xFFFFFF)) &
-                     Styling ansiForegroundColorCode(fgRed, true)
-  failureStyle*    = Styling ansiForegroundColorCode(fgRed)
-  skippedStyle*    = Styling ansiStyleCode(styleStrikethrough) &
-                     Styling ansiForegroundColorCode(fgMagenta, false)
-  exceptionStyle*  = Styling ansiForegroundColorCode(fgRed, true)
-  sourceStyle*     = Styling ansiForegroundColorCode(fgDefault)
-  viaProcStyle*    = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiForegroundColorCode(fgBlue, false)
-  viaFileStyle*    = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiStyleCode(styleUnderscore) &
-                     Styling ansiForegroundColorCode(fgBlue, true)
-  headerStyle*     = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiStyleCode(styleUnderscore) &
-                     Styling ansiForegroundColorCode(fgCyan, true)
-  leaderStyle*     = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiForegroundColorCode(fgCyan, true)
+  resetStyle*      = ansiResetCode.Styling
+  resultsStyle*    = ansiStyleCode(styleItalic).Styling &
+                     ansiForegroundColorCode(fgWhite, true).Styling
+  informStyle*     = ansiForegroundColorCode(fgBlue, true).Styling
+  commentStyle*    = ansiStyleCode(styleItalic).Styling &
+                     ansiForegroundColorCode(fgWhite, true).Styling
+  lineNumStyle*    = ansiStyleCode(styleItalic).Styling &
+                     ansiForegroundColorCode(fgBlack, true).Styling
+  partialStyle*    = ansiForegroundColorCode(fgYellow, true).Styling
+  successStyle*    = ansiForegroundColorCode(fgGreen).Styling
+  oopsStyle*       = ansiStyleCode(styleBright).Styling &
+                     ansiStyleCode(styleReverse).Styling &
+                     "\e[48;2;255;255;255m".Styling &  # nim bug
+                     ansiForegroundColorCode(fgRed, true).Styling
+  failureStyle*    = ansiForegroundColorCode(fgRed).Styling
+  skippedStyle*    = ansiStyleCode(styleStrikethrough).Styling &
+                     ansiForegroundColorCode(fgMagenta, false).Styling
+  exceptionStyle*  = ansiForegroundColorCode(fgRed, true).Styling
+  sourceStyle*     = ansiForegroundColorCode(fgDefault).Styling
+  viaProcStyle*    = ansiStyleCode(styleItalic).Styling &
+                     ansiForegroundColorCode(fgBlue, false).Styling
+  viaFileStyle*    = ansiStyleCode(styleItalic).Styling &
+                     ansiStyleCode(styleUnderscore).Styling &
+                     ansiForegroundColorCode(fgBlue, true).Styling
+  headerStyle*     = ansiStyleCode(styleItalic).Styling &
+                     ansiStyleCode(styleUnderscore).Styling &
+                     ansiForegroundColorCode(fgCyan, true).Styling
+  leaderStyle*     = ansiStyleCode(styleItalic).Styling &
+                     ansiForegroundColorCode(fgCyan, true).Styling
   statusStyles*: array[StatusKind, Styling] = [
     None: resetStyle,
     Info: informStyle,
@@ -68,36 +89,10 @@ const
 
 when ballsAuditTimeSpace: # avoid unused warnings
   const
-    testNumStyle*  = Styling ansiStyleCode(styleItalic) &
-                     Styling ansiForegroundColorCode(fgYellow, true)
+    testNumStyle*  = ansiStyleCode(styleItalic).Styling &
+                     ansiForegroundColorCode(fgYellow, true).Styling
 
 {.pop.}
-
-#when nimvm:
-#  # don't try to mess with styling at compile-time
-#  template useColor* = false
-#  const dynamicColor = true
-#else:
-when ballsDry:
-  const useColor* = false
-  const dynamicColor* = false
-  const hasColor = false
-elif defined(js) or defined(nimscript):
-  # don't bother with these yet
-  const useColor* = false
-  const dynamicColor* = false
-  const hasColor = false
-elif onCI:
-  # CI is always safe to color
-  const useColor* = true
-  const dynamicColor* = false
-  const hasColor = true
-else:
-  # else, color only if we're on a tty
-  let hasColor = stdmsg().isAtty
-  #const hasColor = true
-  macro useColor*: untyped = bindSym"hasColor"
-  const dynamicColor* = true
 
 proc checkpoint*(ss: varargs[string, `$`]) =
   ## Like `echo`, but outputs to `stdmsg()` with the other test output.
@@ -129,55 +124,89 @@ proc prefixLines*(s: NimNode; p: string): NimNode =
   result = nestList(ident"&", result)
 
 when dynamicColor:
-  proc `$`*(style: Styling): string =
-    result = style.string
-    if hasColor:
-      if not result.startsWith(resetStyle.string):
-        result = resetStyle.string & result
-
-  proc `&`*(style: Styling; n: NimNode): NimNode =
-    ## combine style and something $able, but only output the
-    ## style if you find that the program is on a tty at runtime
-    if style.string == "":
-      n # this dollar is sometimes gratuitous...  FIXME: wut.
+  # choose to color at runtime
+  template withColor*(a, b, c: untyped): untyped =
+    ## first argument is run in the vm,
+    ## second argument is run when color is enabled,
+    ## third argument is run otherwise.
+    when nimvm:
+      a
     else:
-      nnkIfStmt.newTreeFrom n:
-        nnkElifBranch.newTreeFrom n:
-          bindSym"hasColor"
-          nestList ident"&":
-            nnkStmtList.newTreeFrom n:
-              newLit style.string
-              n
-              newLit resetStyle.string
-        nnkElse.newTree:
+      if useColor:
+        b
+      else:
+        c
+
+  template `$`*(n: Styling): string =
+    withColor("", n.string & resetStyle.string, "")
+  proc `&`*(style: Styling; n: NimNode): NimNode =
+    let colorized =
+      nestList ident"&":
+        nnkStmtList.newTreeFrom n:
+          newLit style.string
           n
-
-  macro report*(n: string) =
-    ## render a multi-line comment
-    var prefix = $lineNumStyle & "## " & $commentStyle
-    var postfix = newLit resetStyle.string
+          newLit resetStyle.string
     result =
-      nnkIfStmt.newTreeFrom n:
-        nnkElifExpr.newTreeFrom n:
-          bindSym"useColor"
-          output infix(prefixLines(n, prefix), "&", postfix)
-        nnkElse.newTree:
-          output prefixLines(n, "## ")
-
+      genAstOpt({}, n, colorized):
+        withColor(n, colorized, n)
 else:
   when useColor:
-    proc `$`*(style: Styling): string =
-      result = style.string
-      if not result.startsWith(resetStyle.string):
-        result = resetStyle.string & result
+    # always color
+    template withColor*(a, b, c: untyped): untyped = b
+    template `$`*(style: Styling): untyped = style.string
     proc `&`*(style: Styling; n: NimNode): NimNode =
       nestList ident"&":
         nnkStmtList.newTreeFrom n:
           newLit style.string
-          dollar n
+          n
           newLit resetStyle.string
-      dollar n
   else:
+    # never any color
+    template withColor*(a, b, c: untyped): untyped = c
     template `$`*(style: Styling): string = ""
     proc `&`*(style: Styling; n: NimNode): NimNode = n
-    macro report*(n: string) = output prefixLines(n, "## ")
+
+macro report*(n: string) =
+  ## render a compile-time comment nicely
+  var prefix = lineNumStyle.string & "## " & commentStyle.string
+  var postfix = newLit resetStyle.string
+  let colorized {.used.} = output infix(prefixLines(n, prefix), "&", postfix)
+  let bland {.used.} = output prefixLines(n, "## ")
+  result =
+    genAstOpt({}, bland, colorized):
+      withColor(bland, colorized, bland)
+
+proc renderFilename*(s: LineInfo): string =
+  ## render a filename nicely
+  let bland {.used.} = localPath($s.filename)
+  let colorized {.used.} =
+    "$1$3$2$1" % [ $resetStyle, localPath($s.filename), $viaFileStyle ]
+  result = withColor(bland, colorized, bland)
+
+proc renderFilenameAndLine*(s: LineInfo): string =
+  ## render a filename and line number nicely
+  let bland {.used.} = "$1 line $2" % [ localPath($s.filename), $s.line ]
+  let colorized {.used.} =
+    "$1$2$3$1$4 line $5$1" % [ $resetStyle, $viaFileStyle,
+                               localPath($s.filename), $commentStyle, $s.line ]
+  result = withColor(bland, colorized, bland)
+
+proc renderStackEntry*(s: StackTraceEntry; line, code: string): string =
+  ## render a stacktrace entry nicely
+  let bland {.used.} = "$1 $2  # $3()" % [ line, code, $s.procname]
+  let colorized {.used.} =
+    "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle, line, code, $s.procname,
+                                  $lineNumStyle, $sourceStyle, $viaProcStyle ]
+  result = withColor(bland, colorized, bland)
+
+proc comment*(n: NimNode): NimNode =
+  ## render a comment with the given stringish node
+  let bland {.used.} = infix(newLit"## ", "&", n)
+  let colorized {.used.} =
+    nestList ident"&":
+      nnkStmtList.newTreeFrom n:
+        newLit lineNumStyle.string & "## "
+        n
+  result =
+    genAstOpt({}, bland, colorized):
+      withColor(bland, colorized, bland)

@@ -148,3 +148,24 @@ when compileOption"threads":
       body
 else:
   template noclobber*(body: untyped) = body
+
+proc localPath*(fn: string): string =
+  ## a somewhat verbose impl due to necessity
+  when nimvm:
+    when (NimMajor, NimMinor) == (1, 4):
+      result = fn
+    else:
+      result = relativePath(fn, getProjectPath())
+  else:
+    when defined(js):
+      block:
+        when (NimMajor, NimMinor) >= (1, 4):
+          try:
+            result = relativePath(fn, getCurrentDir())
+            break
+          except ValueError:
+            # "specified root is not absolute"; cwd probably unavailable
+            discard
+        result = relativePath(fn, getProjectPath())
+    else:
+      result = relativePath(fn, getCurrentDir())
