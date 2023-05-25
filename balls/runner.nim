@@ -221,7 +221,7 @@ proc matrixTable*(matrix: Matrix): string =
       if p in matrix:
         let status = matrix[p]
         row.add:
-          if useColor():
+          if useColor:
             $statusStyles[status] & $status
           else:
             $status
@@ -466,9 +466,9 @@ iterator compilerCommandLine(p: Profile; withHints = false): seq[string] =
 
   if withHints:                       # toggled so we can omit in an echo
     result.add p.assetOptions         # add --nimCache, --out, --outDir
-
-  if withHints:                       # toggled so we can omit in an echo
     result.add hints(p, ci)           # add Cc, Link, Conf, Processing, etc.
+    when ballsDry:
+      result.add "--define:ballsDry"  # dry runners beget dry tests
 
   result.add p.fn                     # add the filename for c+p reasons
 

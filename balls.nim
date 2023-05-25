@@ -15,6 +15,7 @@ import pkg/ups/sanitize
 
 import balls/spec
 import balls/style
+export checkpoint
 
 export FailError, ExpectedError, SkipError
 
@@ -56,69 +57,7 @@ proc filter(n: NimNode; f: Rewrite): NimNode =
     result = copyNimNode n
     for kid in n.items:
       result.add filter(kid, f)
-
-proc combineLiterals(n: NimNode): NimNode =
-  ## merges "foo" & "bar" into "foobar"
-
-  proc collapser(n: NimNode): NimNode =
-    ## cleaning up useColor conditionals
-    case n.kind
-    of nnkIfStmt:
-      if n.len == 2:
-        # cheating here
-        if {n[0].kind, n[1].kind} == {nnkElifBranch, nnkElse}:
-          if n[0].len == 2:
-            if n[0][0].len == 1 and n[1].len == 1:
-              if n[0][0].kind == nnkCall:
-                if n[0][0][0].kind == nnkSym:
-                  if n[0][0][0].strVal == "useColor":
-                    if n[0][1] == n[1][0]:
-                      result = n[1][0]
-    else:
-      discard
-
-  template isEmptyStringLiteral(n: NimNode): bool =
-    n.kind == nnkStrLit and n.strVal == ""
-
-  proc isSimpleConcatenation(n: NimNode): bool =
-    if n.kind in {nnkCall, nnkInfix} and n.len == 3:
-      result = n[0].kind in {nnkIdent, nnkSym} and n[0].strVal == "&"
-
-  proc count(n: NimNode): int =
-    result = 1
-    for child in n.items:
-      result += count child
-
-  proc rewriteLiteralConcatenation(n: NimNode): NimNode =
-    ## merging concatenations including literals
-    if n.isSimpleConcatenation:
-      var a = rewriteLiteralConcatenation n[1]
-      var b = rewriteLiteralConcatenation n[2]
-      # &(exp, "") -> exp
-      if a.isEmptyStringLiteral:
-        result = b
-      # &("", exp) -> exp
-      elif b.isEmptyStringLiteral:
-        result = a
-      # &("foo", "bar") -> "foobar"
-      elif {a.kind, b.kind} == {nnkStrLit}:
-        result = newLit(a.strVal & b.strVal)
-      # &("foo", &("bar", exp)) -> &("foobar", exp)
-      elif a.kind == nnkStrLit and b.isSimpleConcatenation:
-        if b[1].kind == nnkStrLit:
-          result = newCall(ident"&", newLit(a.strVal & b[1].strVal), b[2])
-      # &(&(exp, "foo"), "bar") -> &(exp, "foobar")
-      elif b.kind == nnkStrLit and a.isSimpleConcatenation:
-        if a[2].kind == nnkStrLit:
-          result = newCall(ident"&", a[1], newLit(a[2].strVal & b.strVal))
-
   result = n
-  result = rewrite result: collapser
-  result = rewrite result: rewriteLiteralConcatenation
-
-proc comment(n: NimNode): NimNode =
-  ## render a comment with the given stringish node
-  infix(lineNumStyle & newLit"## ", "&", n)
 
 # result totals whatfer legend depiction
 proc newtestResults(): seq[int] {.compileTime.} =
@@ -142,23 +81,6 @@ proc prefixLines(s: string; p: string): string =
   for line in items(splitLines(s, keepEol = true)):
     result.add p & line
 
-proc prefixLines(s: NimNode; p: string): NimNode =
-  ## prefix each line of multiline input with the given string
-  result = newStmtList()
-  var ss: NimNode
-  case s.kind
-  of nnkCommentStmt:
-    ss = newStmtList()
-    for line in items(splitLines(s.strVal, keepEol = true)):
-      ss.add line.newLit
-  of nnkStmtList:
-    ss = s
-  else:
-    ss = newStmtList s
-  for line in ss.items:
-    result.add infix(p.newLit, "&", line)
-  result = nestList(ident"&", result)
-
 proc numberLines(s: string; first = 1): NimNode =
   ## prefix each line of multiline input with a rendered line number
   result = newStmtList()
@@ -168,40 +90,16 @@ proc numberLines(s: string; first = 1): NimNode =
     ln = infix(ln, "&", sourceStyle & line.newLit)
     result.add ln
 
-proc checkpoint*(ss: varargs[string, `$`]) =
-  ## Like `echo`, but outputs to `stdmsg()` with the other test output.
-  noclobber:
-    when defined(js) or defined(nimscript):
-      echo ss.join(" ")
-    else:
-      stdmsg().writeLine ss.join(" ")
-
-proc output(n: NimNode): NimNode =
-  assert not n.isNil
-  result = newCall(bindSym"checkpoint", combineLiterals n)
-
 proc output(t: Test; n: NimNode): NimNode =
   assert not n.isNil
   let prefixer = bindSym"prefixLines"
-  result = output newCall(prefixer, dollar(n), newLit($t.status & " "))
+  result = output newCall(prefixer, n, newLit($t.status & " "))
 
 proc output(test: Test; styling: Styling; n: NimNode): NimNode {.used.} =
   assert not n.isNil
   let prefixer = bindSym"prefixLines"
-  result = newCall(prefixer, dollar(n), newLit($test.status & " "))
+  result = newCall(prefixer, n, newLit($test.status & " "))
   result = test.output(styling & result)
-
-macro report(n: string) =
-  ## render a multi-line comment
-  var prefix = $lineNumStyle & "## " & $commentStyle
-  var postfix = newLit resetStyle.string
-  result =
-    nnkIfStmt.newTreeFrom n:
-      nnkElifExpr.newTreeFrom n:
-        newCall bindSym"useColor"
-        output infix(prefixLines(n, prefix), "&", postfix)
-      nnkElse.newTree:
-        output prefixLines(n, "## ")
 
 proc report(n: NimNode): NimNode =
   result = getAst(report n)
@@ -210,37 +108,6 @@ proc niceKind(n: NimNode): NimNode =
   expectKind(n, nnkSym)
   let kind = $n.symKind
   result = newLit toLowerAscii(kind[3..^1])
-
-proc localPath(fn: string): string =
-  ## a somewhat verbose impl due to necessity
-  when nimvm:
-    when (NimMajor, NimMinor) == (1, 4):
-      result = fn
-    else:
-      result = relativePath(fn, getProjectPath())
-  else:
-    when defined(js):
-      block:
-        when (NimMajor, NimMinor) >= (1, 4):
-          try:
-            result = relativePath(fn, getCurrentDir())
-            break
-          except ValueError:
-            # "specified root is not absolute"; cwd probably unavailable
-            discard
-        result = relativePath(fn, getProjectPath())
-    else:
-      result = relativePath(fn, getCurrentDir())
-
-proc renderFilename(s: LineInfo): string =
-  "$1$3$2$1" % [ $resetStyle,
-                 localPath($s.filename),
-                 $viaFileStyle ]
-
-proc renderFilenameAndLine(s: LineInfo): string =
-  "$1$2$3$1$4 line $5$1" % [ $resetStyle,
-                 $viaFileStyle, localPath($s.filename),
-                 $commentStyle, $s.line ]
 
 proc renderFilename(s: StackTraceEntry): string =
   renderFilename LineInfo(filename: $s.filename, line: s.line)
@@ -389,7 +256,10 @@ proc fromFileGetLine(file: string; line: int): string =
   else:
     if file.fileExists:
       let lines = toSeq lines(file)
-      result = lines[line - 1]
+      if line - 1 < lines.high:
+        result = lines[line - 1]
+      else:
+        result = "(line not found)"
     else:
       #result = "(not found: $#)" % [ file ]
       result = "(file not found)"
@@ -410,8 +280,8 @@ proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
       result.add renderFilename(s)
     let code = fromFileGetLine(cf, s.line)
     let line = align($s.line, 5)
-    result.add "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle,
-      line, code, $s.procname, $lineNumStyle, $sourceStyle, $viaProcStyle ]
+    result.add:
+      renderStackEntry(s, line, code)
   checkpoint result.join("\n").prefixLines prefix & emojiStack
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
@@ -555,7 +425,7 @@ proc reportResults(): NimNode =
           newLit""                                  #   ""
   # the result is a concatenation of the above expressions
   result = checkpoint.newCall:
-    combineLiterals nestList(ident"&", legend)
+    nestList(ident"&", legend)
 
 proc composeColon(name: NimNode;
                   value: int | enum | float | string | NimNode): NimNode =
