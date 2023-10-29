@@ -428,7 +428,7 @@ proc commandLine*(p: Profile; withHints = false): string =
     if p.gc == vm:
       "nim $1 $3"
     else:
-      when (NimMajor, NimMinor) >= (1, 7):
+      when (NimMajor, NimMinor) >= (1, 7) and not defined(isNimSkull):
         "nim $1 --mm:$2 $3"
       else:
         "nim $1 --gc:$2 $3"
