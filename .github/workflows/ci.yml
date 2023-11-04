@@ -5,7 +5,8 @@ on:
 
   push:
     branches:
-      - '*'
+      - master
+      - v4
 
   pull_request:
     branches:
