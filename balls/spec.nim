@@ -122,7 +122,7 @@ type
 
 var testCount {.compileTime.}: int                       # whatfer counting!
 
-proc totalTests*(): int =
+proc totalTests*(): int {.compileTime.} =
   ## reveal the value of the counter without exposing it
   testCount
 
