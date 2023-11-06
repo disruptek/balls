@@ -390,7 +390,10 @@ proc options*(p: Profile): seq[string] =
 
   # add a memory management option if appropriate
   if p.gc != vm:
-    result.add "--mm:" & $p.gc
+    when defined(isNimSkull):
+      result.add "--gc:" & $p.gc
+    else:
+      result.add "--mm:" & $p.gc
 
   # grab the user's overrides provided on the command-line
   var params = parameters()
