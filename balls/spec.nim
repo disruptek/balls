@@ -1,5 +1,6 @@
 import std/times
 import std/macros
+import std/macrocache
 import std/os
 
 import grok
@@ -120,11 +121,11 @@ type
     clock*: float          ## used to measure test timing
     memory*: int           ## used to measure test memory
 
-var testCount {.compileTime.}: int                       # whatfer counting!
+const testCount = CacheCounter"balls.spec.testCount"     # whatfer counting!
 
 proc totalTests*(): int =
   ## reveal the value of the counter without exposing it
-  testCount
+  testCount.value
 
 proc init*(test: var Test; name: string; code: NimNode) =
   ## initialize a test with the most basic input possible
@@ -133,7 +134,7 @@ proc init*(test: var Test; name: string; code: NimNode) =
   test.node = nnkStmtList.newNimNode(code)
 
   inc testCount
-  test.number = testCount
+  test.number = testCount.value
 
   # we've stored the original code in the Test object, so now we
   # copy the input and put it into a new statement list; `node` will
@@ -149,7 +150,7 @@ proc init*(test: var Test; name: string; code: NimNode) =
     # the test number so as not to make the user think we skipped some
     # tests
     test.number = 0        # set the test number to zero as a sentinel
-    dec testCount
+    inc testCount, -1
 
 proc dollar*(n: NimNode): NimNode =
   ## If it's not a string literal, dollar it.
