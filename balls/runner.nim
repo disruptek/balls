@@ -418,9 +418,9 @@ proc options*(p: Profile): seq[string] =
     # adjust the debugging symbols for analysis builds
     const Switches = [
       "--define:useMalloc",
-      "--debuginfo",
+      "--debuginfo:on",
       # Enable line directives to map C lines back to Nim
-      "--linedir",
+      "--linedir:on",
       # Enable frame pointers for better backtraces
       "--passC:'-fno-omit-frame-pointer'",
       "--passC:'-mno-omit-leaf-frame-pointer'"
