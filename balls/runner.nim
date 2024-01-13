@@ -416,7 +416,16 @@ proc options*(p: Profile): seq[string] =
 
   if p.an != Execution:
     # adjust the debugging symbols for analysis builds
-    for switch in ["--define:useMalloc", "--debuginfo"]:
+    const Switches = [
+      "--define:useMalloc",
+      "--debuginfo",
+      # Enable line directives to map C lines back to Nim
+      "--linedir",
+      # Enable frame pointers for better backtraces
+      "--passC:'-fno-omit-frame-pointer'",
+      "--passC:'-mno-omit-leaf-frame-pointer'"
+    ]
+    for switch in Switches:
       if switch notin result:
         result.add switch
 
@@ -445,7 +454,7 @@ proc nonsensical*(p: Profile): bool =
     true
   elif p.an in anValgrindInvocation and not useValgrind:
     true
-  elif p.an in {ASanitizer, TSanitizer} and useValgrind:
+  elif p.an in {ASanitizer, TSanitizer} and not ci:
     true
   elif p.gc == vm and p.an in anValgrindInvocation:
     true
