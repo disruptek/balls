@@ -86,10 +86,24 @@ proc hash*(p: Profile): Hash =
   result = !$h
 
 proc short(fn: string): string =
-  extractFilename changeFileExt(fn, "")
+  ## massage a test filename into a shorter, more legible form
+  let short = extractFilename changeFileExt(fn, "")
+  case short
+  of "t":
+    "t"  # 🙄
+  elif short.startsWith("test"):
+    short # okay, buddy
+  else:
+    short[1..short.high]
 
 proc shortPath(fn: string): string =
-  fn.parentDir.lastPathPart / fn.short
+  ## massage a test filename path into a shorter, more legible form
+  let last = fn.parentDir.lastPathPart
+  case last
+  of "tests":
+    short fn
+  else:
+    last / short fn
 
 proc `$`(p: Profile): string =
   "$#: $# $# $# $#" % [ short p.fn, $p.be, $p.gc, $p.opt, $p.an ]
