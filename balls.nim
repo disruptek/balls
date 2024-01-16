@@ -739,5 +739,13 @@ macro test*(name: string; body: untyped) =
 when isMainModule:
   import balls/runner
 
-  # search the tests subdirectory for tests; fall back to current directory
-  main "tests", fallback = true
+  proc firstNonOptionArgument(args: openArray[string]): Option[string] =
+    for arg in args.items:
+      if not arg.startsWith("-"):
+        return some arg
+
+  let pattern = firstNonOptionArgument commandLineParams()
+  if pattern.isSome:      # search using the provided pattern,
+    main(get pattern)
+  else:                   # or the default pattern
+    main(testPattern)

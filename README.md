@@ -44,8 +44,17 @@ runtime will try to guess how to test your project regardless of its structure,
 but you can help narrow what it chooses to compile by...
 
 - placing files matching `t*.nim` under a `tests` subdirectory, or
-- having a single file `foo.nim` in your `foo` project, or
-- simply letting balls test all the files in the current directory
+- simply letting balls test all the files in the current directory, or
+- passing a single argument to balls which is expanded via globbing:
+
+```
+$ balls 'examples/***' # test all files anywhere beneath examples sub-directory
+$ balls 'tests/tfoo' # test the tests/tfoo.nim
+$ balls '**/trunner' # test trunner.nim wherever it may live
+```
+
+You can `--define:ballsPatterns=regex` to use regular expressions in these
+patterns instead of the simpler glob syntax.
 
 The test runner is threaded and runs a comprehensive matrix which tries to
 safely reuse compilation assets.
@@ -61,8 +70,8 @@ $ balls --styleCheck:error
 
 You can specify memory models with which to restrict the test matrix:
 ```
-$ balls --gc:arc --gc:orc
-# ... tests are run only with --gc:arc and --gc:orc ...
+$ balls --mm:arc --mm:orc
+# ... tests are run only with --mm:arc and --mm:orc ...
 ```
 
 You can similarly constrain backends and optimizations:
@@ -74,7 +83,7 @@ $ balls --backend:c --define:danger
 By default, failing tests that are expected to pass will cause
 early termination of the test runner, skipping any remaining test
 invocations. You can disable this behavior by building `balls` with
-`--define:ballsFailFast:off`.
+`--define:ballsFailFast=off`.
 
 Set `BALLS_CORES` in your process environment to a positive integer to
 constrain compilation and test execution to a certain amount of concurrency.
@@ -89,8 +98,10 @@ sanitizer library instead.
 You can add arguments to the valgrind invocations by setting the
 `BALLS_VALGRIND_FLAGS` variable in the environment.
 
-To explicitly disable valgrind in favor of the compiler's sanitizers, build
-the `balls` executable with `--define:ballsUseValgrind:off`.
+To explicitly disable valgrind in favor of the compiler's sanitizers, build the
+`balls` executable with `--define:ballsUseValgrind=off`. You can also enable or
+disable valgrind use by setting the `BALLS_VALGRIND` boolean in your process
+environment.
 
 ## Test Library Usage
 

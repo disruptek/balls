@@ -8,6 +8,7 @@ import std/monotimes
 import std/options
 import std/os
 import std/osproc
+import std/pathnorm
 import std/sequtils
 import std/sets
 import std/streams
@@ -31,6 +32,13 @@ const
   ## if true, quit early on a test failure
   ballsUseValgrind* {.booldefine.} = true ##
   ## if true, attempt to use valgrind in preference to asan/tsan
+  ballsPatterns* {.strdefine.} = "glob" ##
+  ## pattern matching style; "glob" or "regex"
+
+when ballsPatterns == "regex":
+  import std/nre except toSeq
+else:
+  import pkg/glob
 
 type
   Backend* = enum  ## backends that we test
@@ -96,14 +104,23 @@ proc short(fn: string): string =
   else:
     short[1..short.high]
 
-proc shortPath(fn: string): string =
+proc normalPath(filename: string): string =
+  ## normalize a path to unix-style whatfer pattern matching
+  result = filename.normalizePath('/')
+
+proc shortPath*(fn: string): string =
   ## massage a test filename path into a shorter, more legible form
-  let last = fn.parentDir.lastPathPart
-  case last
-  of "tests":
-    short fn
+  let fn = normalPath fn
+  let splat = splitFile fn
+  if splat.dir == "tests":
+    # tests/tread.nim -> read
+    splat.name.short
+  elif splat.dir.isRelativeTo "tests":
+    # tests/api/tread.nim -> api/read
+    splat.dir.tailDir / splat.name.short
   else:
-    last / short fn
+    # examples\random.nim -> examples/random
+    splat.dir / splat.name
 
 proc `$`(p: Profile): string =
   "$#: $# $# $# $#" % [ short p.fn, $p.be, $p.gc, $p.opt, $p.an ]
@@ -142,7 +159,8 @@ proc nearby(p: Profile): (string, int, int, int) =
 proc parameters*(): seq[string] =
   ## ladies and gentlemen, the command-line arguments
   for i in 1..paramCount():
-    result.add paramStr(i)
+    if paramStr(i).startsWith "-":
+      result.add paramStr(i)
 
 proc parameter*(parameters: seq[string]; switch: string): bool =
   ## true if the command-line switch is present in the arguments;
@@ -211,16 +229,12 @@ proc matrixTable*(matrix: Matrix): string =
   # while the matrix has members,
   while matrix.len > 0:
     # reorder the remaining profiles by their display order
-    #let profiles = toSeq(matrix.keys).sortedByIt(it.nearby)
-    # this is dumb for nim-1.[02] reasons
-    var profiles = toSeq matrix.keys
-    proc byProximity(a, b: auto): int = cmp(a.nearby, b.nearby)
-    profiles.sort(byProximity, Ascending)
+    let profiles = toSeq(matrix.keys).sortedByIt(it.nearby)
 
     # the first profile in that list is the best one to show next
     var p = profiles[0]
 
-    # compose a row's prefix labels in a lame way
+    # compose a row's prefix labels
     var row =
       case p.an
       of Execution:
@@ -278,7 +292,7 @@ var opt* = {
   release: @["--define:release",
              "--lineTrace:on", "--stackTrace:on", "--excessiveStackTrace:on"],
   danger: @["--define:danger"]
-}.toTable
+}.toOrderedTable
 
 # use the optimizations specified on the command-line
 var specifiedOpt = specifiedOptimizer(parameters()).toSet
@@ -698,7 +712,7 @@ proc perform*(profiles: seq[Profile]) =
     return  # no profiles, no problem
 
   # batch the profiles according to their cache
-  var batches: Table[string, seq[Profile]]
+  var batches: OrderedTable[string, seq[Profile]]
   for profile in profiles.items:
     let cache = profile.cache
     if cache in batches:
@@ -733,106 +747,70 @@ proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
   var profile: Profile
   profile.fn = fn
-  for opt in opt.keys:
-    profile.opt = opt
-    for gc in gc.items:
-      profile.gc = gc
-      for be in be.items:
-        profile.be = be
-        for an in Analyzer.items:
-          profile.an = an
-          if not profile.nonsensical:
-            result.add profile
+  for optimizer in Optimizer.items:
+    if optimizer in opt:
+      profile.opt = optimizer
+      for memory in MemModel.items:
+        if memory in gc:
+          profile.gc = memory
+          for backend in Backend.items:
+            if backend in be:
+              profile.be = backend
+              for analyzer in Analyzer.items:
+                profile.an = analyzer
+                if not profile.nonsensical:
+                  result.add profile
 
-proc ordered*(directory: string; testsOnly = true): seq[string] =
-  ## Order a directory tree of test files usefully; set `testsOnly`
-  ## for rigid "must start with a t and end with .nim" behavior.  If
-  ## `testsOnly` is set, the search is recursive.
+when ballsPatterns == "regex":
+  const testPattern* = "tests/.*/t.*"
+  type Pattern = Regex
+  proc makePattern*(pattern: string): Pattern =
+    ## Compile a regex pattern.
+    Pattern: re(pattern & "\\.nim$")
+  proc doesMatch*(filename: string; pattern: Pattern): bool =
+    ## Determine if a filename is unmasked by a regex.
+    filename.normalPath.find(pattern).isSome
+else:
+  const testPattern* = "tests/**/t*"
+  type Pattern = Glob
+  proc makePattern*(patt: string): Pattern =
+    ## Compile a glob pattern.
+    Pattern: glob(patt & ".nim")
+  proc doesMatch*(filename: string; patt: Pattern): bool =
+    ## Determine if a filename is unmasked by a glob.
+    filename.normalPath.matches patt
+
+proc ordered*(directory: string; pattern: Pattern): seq[string] =
+  ## Order a `directory` tree of test files recursively,
+  ## selecting tests according to the `pattern`.
   if not directory.dirExists: return @[]
-  if testsOnly:
-    # collect the filenames recursively, but only .nim
-    for test in walkDirRec(directory, yieldFilter = {pcFile, pcLinkToFile}):
-      if test.extractFilename.startsWith("t") and test.endsWith(".nim"):
-        result.add test
+  # collect the filenames recursively
+  for file in walkDirRec(directory, yieldFilter = {pcFile, pcLinkToFile}):
+    if file.doesMatch(pattern):
+      result.add(file)
+  when true:
+    # sort them by name, alphabetically
+    result.sort(system.cmp, Ascending)
   else:
-    # don't recurse; just collect files, but also consume .nims
-    for kind, test in walkDir directory:
-      if test.endsWith(".nim") or test.endsWith(".nims"):
-        result.add test
+    # sort them by age, recently-changed first
+    proc age(path: string): Time =
+      getFileInfo(path, followSymlink = true).lastWriteTime
+    proc byAge(a, b: string): int = system.cmp(a.age, b.age)
+    result.sort(byAge, Descending)
 
-  # if we're not in strict mode,
-  if not testsOnly:
-    type
-      # just documentation for now...
-      Sig {.used.} = enum
-        Zero = "no files match the provided extension"
-        One  = "one file matches and it shares the name of the project"
-        Many = "multiple files exist for the given extension"
-
-    proc matching(among: seq[string]; pro: string): seq[string] =
-      ## pluck out files from `among` which match the project name
-      const
-        useCaps = true
-      let proj = sanitizeIdentifier(pro, capsOkay = useCaps)
-      if proj.isNone:
-        # the current directory isn't a sane identifier 🙄
-        return @[]
-      else:
-        for file in among.items:
-          let splat = file.extractFilename.splitFile
-          let name = sanitizeIdentifier(splat.name, capsOkay = useCaps)
-          if name.isSome:
-            if name.get == proj.get:
-              result.add file
-
-    let proj = extractFilename getCurrentDir()
-    var promatches = matching(result, proj)
-    sort promatches
-    for ext in [".nim", ".nims"]:
-      # these are files that match the given extension
-      var files = filterIt(result, it.splitFile.ext == ext)
-
-      # collect the instances of these that share the same import name
-      var matches = matching(files, proj)
-      sort matches
-
-      # some of these scenarios will cause us to skip changing the result,
-      # while others will cause us to replace the result list with one file
-      if files.len == 0:                                    # Zero
-        continue
-      elif matches.len == 1:                                # One
-        discard
-      elif matches.len > 0 and matches == promatches:       # One
-        # XXX: for now, we ignore x.nims in x.(nims|nim)
-        discard
-        #continue
-      else:                                                 # Many
-        continue
-
-      # we want a single file; the best of the project-named files
-      result = @[matches[0]]
-      break
-
-  # sort them by age, recently-changed first
-  proc age(path: string): Time =
-    getFileInfo(path, followSymlink = true).lastWriteTime
-  proc byAge(a, b: string): int = system.cmp(a.age, b.age)
-  result.sort(byAge, Descending)
-
-proc main*(directory: string; fallback = false) =
-  ## Run each test in the `directory` in a useful order; set `fallback` to
-  ## `true` to fall back to a loose search in the current directory for
-  ## testable code.
-  var tests: seq[string]
-  # first check the supplied directory
-  tests = ordered directory
+proc main*(patt: string) =
+  ## Run each of `pattern`-matching tests.
+  # compile the pattern matcher
+  let pattern = makePattern patt
+  # first check the tests sub-directory
+  var tests = ordered("tests", pattern)
   try:
-    # if there are no tests in the directory,
+    # if we've found no tests so far,
     if tests.len == 0:
-      # try to find something good to run in the current directory
-      tests = ordered(getCurrentDir(), testsOnly = false)
+      # try to find tests from the current directory
+      tests = ordered(".", pattern)
     if tests.len == 0:
-      checkpoint "couldn't find any tests to run; that's good, right?"
+      checkpoint "no tests found for '" & patt & "'; that's good, right?"
       quit 0
   except OSError as e:
     checkpoint "bad news about the current directory... it's gone?"
