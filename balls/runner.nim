@@ -482,7 +482,7 @@ proc nonsensical*(p: Profile): bool =
     true
   elif p.an in anValgrindInvocation and not useValgrind:
     true
-  elif p.an in {ASanitizer, TSanitizer} and useValgrind:
+  elif p.an in {ASanitizer, TSanitizer} and useValgrind and not ci:
     true
   elif p.gc == vm and p.an in anValgrindInvocation:
     true
