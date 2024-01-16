@@ -739,8 +739,13 @@ macro test*(name: string; body: untyped) =
 when isMainModule:
   import balls/runner
 
-  let params = commandLineParams()
-  if params.len > 0:      # search using the provided pattern,
-    main(params[0])
+  proc firstNonOptionArgument(args: openArray[string]): Option[string] =
+    for arg in args.items:
+      if not arg.startsWith("-"):
+        return some arg
+
+  let pattern = firstNonOptionArgument commandLineParams()
+  if pattern.isSome:      # search using the provided pattern,
+    main(get pattern)
   else:                   # or the default pattern
     main(testPattern)
