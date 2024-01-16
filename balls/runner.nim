@@ -795,7 +795,6 @@ proc main*(patt: string) =
   ## Run each of `pattern`-matching tests.
   # compile the pattern matcher
   let pattern = makePattern patt
-  echo patt
   # first check the tests sub-directory
   var tests = ordered("tests", pattern)
   try:
@@ -804,7 +803,7 @@ proc main*(patt: string) =
       # try to find tests from the current directory
       tests = ordered(".", pattern)
     if tests.len == 0:
-      checkpoint "couldn't find any tests to run; that's good, right?"
+      checkpoint "no tests found for '" & patt & "'; that's good, right?"
       quit 0
   except OSError as e:
     checkpoint "bad news about the current directory... it's gone?"
