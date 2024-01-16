@@ -41,8 +41,14 @@ proc render*(t: Tabouli; size = 1): string =
     result.add $leaderStyle
     for i, s in row.pairs:
       if i < t.freeze:
-        # right-align the early columns
-        result.add align(s, widths[i])
+        let name =
+          # omit the name if it's the same as the one above
+          if i == 0 and r > 0 and t.rows[r][i] == t.rows[r-1][i]:
+            ""
+          else:
+            s
+        # left-align the early columns since they form hierarchies
+        result.add alignLeft(name, widths[i])
       else:
         # NOTE: later columns are aligned, but we don't use align()
         # 'cause it won't understand our embedded style controls

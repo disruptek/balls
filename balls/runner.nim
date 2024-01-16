@@ -234,7 +234,7 @@ proc matrixTable*(matrix: Matrix): string =
     # the first profile in that list is the best one to show next
     var p = profiles[0]
 
-    # compose a row's prefix labels in a lame way
+    # compose a row's prefix labels
     var row =
       case p.an
       of Execution:
