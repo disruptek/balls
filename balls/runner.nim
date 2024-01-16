@@ -108,14 +108,19 @@ proc normalPath(filename: string): string =
   ## normalize a path to unix-style whatfer pattern matching
   result = filename.normalizePath('/')
 
-proc shortPath(fn: string): string =
+proc shortPath*(fn: string): string =
   ## massage a test filename path into a shorter, more legible form
-  if fn.startsWith("tests" / ""):
-    # tests/trandom.nim -> random
-    short fn
+  let fn = normalPath fn
+  let splat = splitFile fn
+  if splat.dir == "tests":
+    # tests/tread.nim -> read
+    splat.name.short
+  elif splat.dir.isRelativeTo "tests":
+    # tests/api/tread.nim -> api/read
+    splat.dir.tailDir / splat.name.short
   else:
     # examples\random.nim -> examples/random
-    fn.normalPath.changeFileExt("")
+    splat.dir / splat.name
 
 proc `$`(p: Profile): string =
   "$#: $# $# $# $#" % [ short p.fn, $p.be, $p.gc, $p.opt, $p.an ]
