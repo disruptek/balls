@@ -292,7 +292,7 @@ var opt* = {
   release: @["--define:release",
              "--lineTrace:on", "--stackTrace:on", "--excessiveStackTrace:on"],
   danger: @["--define:danger"]
-}.toTable
+}.toOrderedTable
 
 # use the optimizations specified on the command-line
 var specifiedOpt = specifiedOptimizer(parameters()).toSet
@@ -712,7 +712,7 @@ proc perform*(profiles: seq[Profile]) =
     return  # no profiles, no problem
 
   # batch the profiles according to their cache
-  var batches: Table[string, seq[Profile]]
+  var batches: OrderedTable[string, seq[Profile]]
   for profile in profiles.items:
     let cache = profile.cache
     if cache in batches:
@@ -747,16 +747,19 @@ proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
   var profile: Profile
   profile.fn = fn
-  for opt in opt.keys:
-    profile.opt = opt
-    for gc in gc.items:
-      profile.gc = gc
-      for be in be.items:
-        profile.be = be
-        for an in Analyzer.items:
-          profile.an = an
-          if not profile.nonsensical:
-            result.add profile
+  for optimizer in Optimizer.items:
+    if optimizer in opt:
+      profile.opt = optimizer
+      for memory in MemModel.items:
+        if memory in gc:
+          profile.gc = memory
+          for backend in Backend.items:
+            if backend in be:
+              profile.be = backend
+              for analyzer in Analyzer.items:
+                profile.an = analyzer
+                if not profile.nonsensical:
+                  result.add profile
 
 when ballsPatterns == "regex":
   const testPattern* = "tests/.*/t.*"
@@ -785,11 +788,15 @@ proc ordered*(directory: string; pattern: Pattern): seq[string] =
   for file in walkDirRec(directory, yieldFilter = {pcFile, pcLinkToFile}):
     if file.doesMatch(pattern):
       result.add(file)
-  # sort them by age, recently-changed first
-  proc age(path: string): Time =
-    getFileInfo(path, followSymlink = true).lastWriteTime
-  proc byAge(a, b: string): int = system.cmp(a.age, b.age)
-  result.sort(byAge, Descending)
+  when true:
+    # sort them by name, alphabetically
+    result.sort(system.cmp, Ascending)
+  else:
+    # sort them by age, recently-changed first
+    proc age(path: string): Time =
+      getFileInfo(path, followSymlink = true).lastWriteTime
+    proc byAge(a, b: string): int = system.cmp(a.age, b.age)
+    result.sort(byAge, Descending)
 
 proc main*(patt: string) =
   ## Run each of `pattern`-matching tests.
