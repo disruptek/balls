@@ -739,5 +739,8 @@ macro test*(name: string; body: untyped) =
 when isMainModule:
   import balls/runner
 
-  # search the tests subdirectory for tests; fall back to current directory
-  main "tests", fallback = true
+  let params = commandLineParams()
+  if params.len > 0:      # search using the provided pattern,
+    main(params[0])
+  else:                   # or the default pattern
+    main(testPattern)

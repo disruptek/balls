@@ -7,6 +7,7 @@ license = "MIT"
 requires "https://github.com/disruptek/grok >= 0.5.0 & < 1.0.0"
 requires "https://github.com/disruptek/ups < 1.0.0"
 requires "https://github.com/disruptek/insideout"
+requires "https://github.com/haltcase/glob#64f71af2fa4572c2bdf8987a56a427c1d88fc34f"
 
 bin = @["balls"]            # build the binary for basic test running
 installExt = @["nim"]       # we need to install balls.nim also
