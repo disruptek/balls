@@ -123,7 +123,7 @@ proc shortPath*(fn: string): string =
     splat.dir / splat.name
 
 proc `$`(p: Profile): string =
-  "$#: $# $# $# $#" % [ short p.fn, $p.be, $p.gc, $p.opt, $p.an ]
+  "$#: $# $# $# $#" % [ p.fn.shortPath, $p.be, $p.gc, $p.opt, $p.an ]
 
 template cmper(f: untyped) {.dirty.} =
   result = system.cmp(a.`f`, b.`f`)
