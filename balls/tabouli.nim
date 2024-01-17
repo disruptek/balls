@@ -41,14 +41,15 @@ proc render*(t: Tabouli; size = 1): string =
     result.add $leaderStyle
     for i, s in row.pairs:
       if i < t.freeze:
-        let name =
+        let s =
           # omit the name if it's the same as the one above
-          if i == 0 and r > 0 and t.rows[r][i] == t.rows[r-1][i]:
+          if r > 0 and t.rows[r][0] == t.rows[r-1][0] and  # same path
+                       t.rows[r][i] == t.rows[r-1][i]:     # same column
             ""
           else:
             s
         # left-align the early columns since they form hierarchies
-        result.add alignLeft(name, widths[i])
+        result.add alignLeft(s, widths[i])
       else:
         # NOTE: later columns are aligned, but we don't use align()
         # 'cause it won't understand our embedded style controls
