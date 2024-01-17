@@ -314,6 +314,8 @@ proc nonsensical*(an: Analyzer): bool =
     true
   elif an in {ASanitizer, TSanitizer} and useValgrind and not ci:
     true
+  elif an != Execution and danger notin opt:
+    true
   else:
     false
 
@@ -349,11 +351,10 @@ iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
           p.an = an
           p.opt = optimizer
           yield p
-    else:
-        p.an = an
-        p.opt = danger
-        if not p.nonsensical:
-          yield p
+    elif not an.nonsensical:
+      p.an = an
+      p.opt = danger
+      yield p
 
 proc matrixTable*(matrix: Matrix): string =
   ## Render the `matrix` as a table.
@@ -367,9 +368,7 @@ proc matrixTable*(matrix: Matrix): string =
       for optimizer in Optimizer.items:
         if optimizer in opt:
           tab.headers.add $optimizer
-    elif an.nonsensical:
-      discard
-    else:
+    elif not an.nonsensical:
       tab.headers.add $an
 
   # while the matrix has members,
