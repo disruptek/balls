@@ -747,17 +747,24 @@ proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
   var profile: Profile
   profile.fn = fn
-  for optimizer in Optimizer.items:
-    if optimizer in opt:
-      profile.opt = optimizer
-      for memory in MemModel.items:
-        if memory in gc:
-          profile.gc = memory
-          for backend in Backend.items:
-            if backend in be:
-              profile.be = backend
-              for analyzer in Analyzer.items:
-                profile.an = analyzer
+  # NOTE:
+  # if we're testing more than one backend, it's probably
+  # because we aren't expecting any to fail; run through
+  # them one-at-a-time since it's most likely that our
+  # tests fail, for whatever reason, on the first backend
+  for backend in Backend.items:
+    if backend in be:
+      profile.be = backend
+      # NOTE: probe for leaks in orc before we check for races in arc
+      for analyzer in Analyzer.items:
+        profile.an = analyzer
+        # NOTE: sanitizers are essentially optimizers
+        for optimizer in Optimizer.items:
+          if optimizer in opt:
+            profile.opt = optimizer
+            for memory in MemModel.items:
+              if memory in gc:
+                profile.gc = memory
                 if not profile.nonsensical:
                   result.add profile
 
