@@ -153,8 +153,9 @@ proc contains*(matrix: Matrix; p: Profile): bool =
   ## present in the test `matrix`.
   matrix.getOrDefault(p, None) notin {None}
 
-proc nearby(p: Profile): (string, int, int, int) =
-  result = (p.fn.shortPath, ord p.be, ord p.opt, ord p.an)
+proc nearby(p: Profile): auto =
+  ## how we group profiles to the same row
+  result = (p.fn.shortPath, ord p.be, ord p.gc)
 
 proc parameters*(): seq[string] =
   ## ladies and gentlemen, the command-line arguments
@@ -199,90 +200,6 @@ makeSpecifier(Optimizer, ["-d:", "--define:"])
 proc toSet[T: int8 | int16 | enum | uint8 | uint16 | char](ss: openArray[T]): set[T] =
   for item in ss.items:
     result.incl item
-
-iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
-  ## emit the profile permutations appropriate for this row
-  var p = p
-  for mm in MemModel:
-    p.gc = mm
-    if p.gc == vm:
-      p.be = e
-    yield p
-  p.be = js
-  p.gc = vm
-  yield p
-
-proc matrixTable*(matrix: Matrix): string =
-  ## Render the `matrix` as a table.
-  var matrix = matrix
-  var tab = Tabouli()
-  tab.headers = @["nim-" & NimVersion, "", ""]
-  tab.freeze = len tab.headers
-  for mm in MemModel:
-    tab.headers.add:
-      if mm == markAndSweep:
-        "m&s"
-      else:
-        $mm
-  tab.headers.add $js
-
-  # while the matrix has members,
-  while matrix.len > 0:
-    # reorder the remaining profiles by their display order
-    let profiles = toSeq(matrix.keys).sortedByIt(it.nearby)
-
-    # the first profile in that list is the best one to show next
-    var p = profiles[0]
-
-    # compose a row's prefix labels
-    var row =
-      case p.an
-      of Execution:
-        @[p.fn.shortPath, $p.be, $p.opt]
-      else:
-        @[p.fn.shortPath, $p.be, $p.an]
-
-    # then iterate over the memory models and consume any results
-    for p in rowPermutations(matrix, p):
-      # pull the run out of the matrix if possible
-      # (we can't use pop|take whatfer nim-1.0 reasons)
-      if p in matrix:
-        let status = matrix[p]
-        row.add:
-          if useColor:
-            $statusStyles[status] & $status
-          else:
-            $status
-      else:
-        row.add " "
-      matrix.del p        # we have to scrub all matching profiles thusly
-    if row[3..^1].join(" ").strip() != "":   # omit rows without any status
-      tab.rows.add row    # we're done with this row; add it to the table
-
-  # pass the length of StatusKind.None; this corresponds to the width
-  # of the other StatusKind values, in characters, which is 1 for bland
-  # values and 2 for wide emojis
-  result = render(tab, size = len $None)
-
-proc hints*(p: Profile; ci: bool): seq[string] =
-  ## Compute `--hint` and `--warning` flags as appropriate given Profile
-  ## `p`, `ci` status, and compile-time Nim version information.
-  var omit = @["Cc", "Link", "Conf", "Processing", "Exec", "Name",
-               "XDeclaredButNotUsed"]
-  if ci or p.opt notin {danger}:
-    # ignore performance warnings outside of local danger builds
-    omit.add "Performance"
-  for hint in omit.items:
-    result.add "--hint[$#]=off" % [ hint ]
-
-  ## compute --warning(s) as appropriate
-  omit = @[]
-  if ci:
-    # remove spam from ci logs
-    omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
-    omit.add ["ObservableStores", "UnreachableCode", "BareExcept"]
-  for warning in omit.items:
-    result.add "--warning[$#]=off" % [ warning ]
 
 let ci* = getEnv("GITHUB_ACTIONS", "false") == "true"
 # set some default matrix members (profiles)
@@ -331,6 +248,184 @@ if {e, js} * be != {}:
 
 # options common to all profiles
 var defaults* = @["--incremental:off", "--parallelBuild:1"]
+
+let nimExecutable = findExe"nim"
+let valgrindExecutable = findExe"valgrind"
+let useValgrind = "" != valgrindExecutable and
+  parseBool(getEnv("BALLS_VALGRIND", $ballsUseValgrind))
+
+proc options*(p: Profile): seq[string] =
+  result = defaults & opt[p.opt]
+
+  # add a memory management option if appropriate
+  if p.gc != vm:
+    when defined(isNimSkull):
+      result.add "--gc:" & $p.gc
+    else:
+      result.add "--mm:" & $p.gc
+
+  # grab the user's overrides provided on the command-line
+  var params = parameters()
+
+  # filter out any "specified" options we've already consumed
+  params = filteredMemModel params
+  params = filteredOptimizer params
+  params = filteredBackend params
+
+  # and otherwise pass those options on to the compiler
+  result.add params
+
+  if p.be == js:
+    # add --define:nodejs on js backend so that getCurrentDir() works
+    result.add "--define:nodejs"
+
+  # use goto exceptions only in c
+  if p.be == c:
+    result.add "--exceptions:goto"
+
+  if p.an != Execution:
+    # adjust the debugging symbols for analysis builds
+    const Switches = [
+      "--define:useMalloc",
+      "--debuginfo:on",
+      # Enable line directives to map C lines back to Nim
+      "--linedir:on",
+      # Enable frame pointers for better backtraces
+      "--passC:'-fno-omit-frame-pointer'",
+      "--passC:'-mno-omit-leaf-frame-pointer'"
+    ]
+    for switch in Switches:
+      if switch notin result:
+        result.add switch
+
+  case p.an
+  of ASanitizer:
+    result.add """--passC:"-fsanitize=address""""
+    result.add """--passL:"-fsanitize=address""""
+  of TSanitizer:
+    result.add """--passC:"-fsanitize=thread""""
+    result.add """--passL:"-fsanitize=thread""""
+  else:
+    discard
+
+proc nonsensical*(an: Analyzer): bool =
+  ## certain analyzers need not be attempted
+  if an in anValgrindInvocation and not useValgrind:
+    true
+  elif an in {ASanitizer, TSanitizer} and useValgrind and not ci:
+    true
+  else:
+    false
+
+proc nonsensical*(p: Profile): bool =
+  ## certain profiles need not be attempted
+  if p.gc == vm and p.be notin {js, e}:
+    true
+  elif p.be in {js, e} and p.gc != vm:
+    true
+  elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
+    true
+  elif p.an.nonsensical:
+    true
+  elif p.gc == vm and p.an in anValgrindInvocation:
+    true
+  elif p.an != Execution and p.opt notin {danger}:
+    true
+  elif p.an != Execution and p.gc notin {arc, orc}:
+    true
+  elif p.an != Execution and p.options.parameter("--compileOnly"):
+    true
+  else:
+    false
+
+iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
+  ## emit the profile permutations appropriate for this row
+  var p = p
+  for an in Analyzer.items:
+    case an
+    of Execution:
+      for optimizer in Optimizer.items:
+        if optimizer in opt:
+          p.an = an
+          p.opt = optimizer
+          yield p
+    else:
+        p.an = an
+        p.opt = danger
+        if not p.nonsensical:
+          yield p
+
+proc matrixTable*(matrix: Matrix): string =
+  ## Render the `matrix` as a table.
+  var matrix = matrix
+  var tab = Tabouli()
+  tab.headers = @["nim-" & NimVersion, "", ""]
+  tab.freeze = len tab.headers
+  for an in Analyzer.items:
+    case an
+    of Execution:
+      for optimizer in Optimizer.items:
+        if optimizer in opt:
+          tab.headers.add $optimizer
+    elif an.nonsensical:
+      discard
+    else:
+      tab.headers.add $an
+
+  # while the matrix has members,
+  while matrix.len > 0:
+    # reorder the remaining profiles by their display order
+    let profiles = toSeq(matrix.keys).sortedByIt(it.nearby)
+
+    # the first profile in that list is the best one to show next
+    var p = profiles[0]
+
+    # compose a row's prefix labels
+    var row = @[p.fn.shortPath, $p.be, $p.gc]
+    assert row.len == tab.freeze, "counting is hard"
+
+    # then iterate over the memory models and consume any results
+    for p in rowPermutations(matrix, p):
+      # pull the run out of the matrix if possible
+      # (we can't use pop|take whatfer nim-1.0 reasons)
+      if p in matrix:
+        let status = matrix[p]
+        row.add:
+          if useColor:
+            $statusStyles[status] & $status
+          else:
+            $status
+      else:
+        row.add " "
+      matrix.del p        # we have to scrub all matching profiles thusly
+    # only add rows with some kind of status entry
+    if row[tab.freeze..^1].join(" ").strip() != "":
+      tab.rows.add row    # we're done with this row; add it to the table
+
+  # pass the length of StatusKind.None; this corresponds to the width
+  # of the other StatusKind values, in characters, which is 1 for bland
+  # values and 2 for wide emojis
+  result = render(tab, size = len $None)
+
+proc hints*(p: Profile; ci: bool): seq[string] =
+  ## Compute `--hint` and `--warning` flags as appropriate given Profile
+  ## `p`, `ci` status, and compile-time Nim version information.
+  var omit = @["Cc", "Link", "Conf", "Processing", "Exec", "Name",
+               "XDeclaredButNotUsed"]
+  if ci or p.opt notin {danger}:
+    # ignore performance warnings outside of local danger builds
+    omit.add "Performance"
+  for hint in omit.items:
+    result.add "--hint[$#]=off" % [ hint ]
+
+  ## compute --warning(s) as appropriate
+  omit = @[]
+  if ci:
+    # remove spam from ci logs
+    omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
+    omit.add ["ObservableStores", "UnreachableCode", "BareExcept"]
+  for warning in omit.items:
+    result.add "--warning[$#]=off" % [ warning ]
 
 proc cache*(p: Profile): string =
   ## come up with a unique cache directory according to where you'd like
@@ -412,88 +507,6 @@ proc assetOptions*(p: Profile): seq[string] =
 
     # use the nimcache for our output directory
     result.add "--outDir:" & p.cache
-
-proc options*(p: Profile): seq[string] =
-  result = defaults & opt[p.opt]
-
-  # add a memory management option if appropriate
-  if p.gc != vm:
-    when defined(isNimSkull):
-      result.add "--gc:" & $p.gc
-    else:
-      result.add "--mm:" & $p.gc
-
-  # grab the user's overrides provided on the command-line
-  var params = parameters()
-
-  # filter out any "specified" options we've already consumed
-  params = filteredMemModel params
-  params = filteredOptimizer params
-  params = filteredBackend params
-
-  # and otherwise pass those options on to the compiler
-  result.add params
-
-  if p.be == js:
-    # add --define:nodejs on js backend so that getCurrentDir() works
-    result.add "--define:nodejs"
-
-  # use goto exceptions only in c
-  if p.be == c:
-    result.add "--exceptions:goto"
-
-  if p.an != Execution:
-    # adjust the debugging symbols for analysis builds
-    const Switches = [
-      "--define:useMalloc",
-      "--debuginfo:on",
-      # Enable line directives to map C lines back to Nim
-      "--linedir:on",
-      # Enable frame pointers for better backtraces
-      "--passC:'-fno-omit-frame-pointer'",
-      "--passC:'-mno-omit-leaf-frame-pointer'"
-    ]
-    for switch in Switches:
-      if switch notin result:
-        result.add switch
-
-  case p.an
-  of ASanitizer:
-    result.add """--passC:"-fsanitize=address""""
-    result.add """--passL:"-fsanitize=address""""
-  of TSanitizer:
-    result.add """--passC:"-fsanitize=thread""""
-    result.add """--passL:"-fsanitize=thread""""
-  else:
-    discard
-
-let nimExecutable = findExe"nim"
-let valgrindExecutable = findExe"valgrind"
-let useValgrind = "" != valgrindExecutable and
-  parseBool(getEnv("BALLS_VALGRIND", $ballsUseValgrind))
-
-proc nonsensical*(p: Profile): bool =
-  ## certain profiles need not be attempted
-  if p.gc == vm and p.be notin {js, e}:
-    true
-  elif p.be in {js, e} and p.gc != vm:
-    true
-  elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
-    true
-  elif p.an in anValgrindInvocation and not useValgrind:
-    true
-  elif p.an in {ASanitizer, TSanitizer} and useValgrind and not ci:
-    true
-  elif p.gc == vm and p.an in anValgrindInvocation:
-    true
-  elif p.an != Execution and p.opt notin {danger}:
-    true
-  elif p.an != Execution and p.gc notin {arc, orc}:
-    true
-  elif p.an != Execution and p.options.parameter("--compileOnly"):
-    true
-  else:
-    false
 
 iterator compilerCommandLine(p: Profile; withHints = false): seq[string] =
   ## compose the interesting parts of the compiler invocation
@@ -747,17 +760,24 @@ proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
   var profile: Profile
   profile.fn = fn
-  for optimizer in Optimizer.items:
-    if optimizer in opt:
-      profile.opt = optimizer
-      for memory in MemModel.items:
-        if memory in gc:
-          profile.gc = memory
-          for backend in Backend.items:
-            if backend in be:
-              profile.be = backend
-              for analyzer in Analyzer.items:
-                profile.an = analyzer
+  # NOTE:
+  # if we're testing more than one backend, it's probably
+  # because we aren't expecting any to fail; run through
+  # them one-at-a-time since it's most likely that our
+  # tests fail, for whatever reason, on the first backend
+  for backend in Backend.items:
+    if backend in be:
+      profile.be = backend
+      # NOTE: probe for leaks in orc before we check for races in arc
+      for analyzer in Analyzer.items:
+        profile.an = analyzer
+        # NOTE: sanitizers are essentially optimizers
+        for optimizer in Optimizer.items:
+          if optimizer in opt:
+            profile.opt = optimizer
+            for memory in MemModel.items:
+              if memory in gc:
+                profile.gc = memory
                 if not profile.nonsensical:
                   result.add profile
 
