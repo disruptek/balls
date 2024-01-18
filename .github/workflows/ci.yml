@@ -30,8 +30,25 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest', 'macos-latest', 'ubuntu-latest']
-        nim: ['devel', 'version-1-6', 'version-1-4', 'version-1-2', 'version-1-0']
-    name: '${{ matrix.os }} (${{ matrix.nim }})'
+        compiler:
+          - name: nim
+            version: devel
+          - name: nim
+            version: version-1-6
+          - name: nim
+            version: version-1-4
+          - name: nim
+            version: version-1-2
+          - name: nim
+            version: version-1-0
+          - name: nimskull
+            version: '*'
+        exclude:
+          - os: windows-latest
+            compiler:
+              name: nimskull
+
+    name: '${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }})'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -40,10 +57,38 @@ jobs:
           path: ci
 
       - name: Setup Nim
+        if: matrix.compiler.name == 'nim'
         uses: alaviss/setup-nim@0.1.1
         with:
           path: nim
-          version: ${{ matrix.nim }}
+          version: ${{ matrix.compiler.version }}
+
+      - name: Setup Nimskull
+        id: nimskull
+        if: matrix.compiler.name == 'nimskull'
+        uses: alaviss/setup-nimskull@f6e8ade8ac51191024616216e5da0ee968d9da48
+        with:
+          version: ${{ matrix.compiler.version }}
+
+      - if: matrix.compiler.name == 'nimskull'
+        name: Fetch nimble's fork for nimskull
+        uses: actions/checkout@v4
+        with:
+          path: nimble
+          repository: alaviss/nimble
+          ref: nimskull
+
+      - if: matrix.compiler.name == 'nimskull'
+        name: Build nimble and add to PATH
+        shell: bash
+        run: |
+          cd nimble
+          nim c -d:release -o:nimble src/nimble.nim
+          cp nimble "$NIMSKULL_BIN/nimble"
+          # Add nimble binary folder to PATH too
+          echo "$HOME/.nimble/bin" >> $GITHUB_PATH
+        env:
+          NIMSKULL_BIN: ${{ steps.nimskull.outputs.binPath }}
 
       - name: Run tests
         shell: bash
@@ -72,7 +117,8 @@ jobs:
       - name: Publish docs
         if: >
           github.event_name == 'push' && github.ref == 'refs/heads/master' &&
-          matrix.os == 'ubuntu-latest' && matrix.nim == 'devel'
+          matrix.os == 'ubuntu-latest' && matrix.compiler.name == 'nim' &&
+          matrix.compiler.version == 'devel'
         uses: crazy-max/ghaction-github-pages@v1
         with:
           build_dir: ci/docs
