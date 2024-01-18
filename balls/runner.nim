@@ -239,7 +239,9 @@ proc hints*(p: Profile; ci: bool): string =
   omit = @[]
   if ci:
     # remove spam from ci logs
-    omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
+    omit.add ["UnusedImport", "ProveInit"]
+    when not defined(isNimSkull):
+      omit.add "CaseTransition"
     when (NimMajor, NimMinor) >= (1, 2):
       omit.add "ObservableStores"
     when (NimMajor, NimMinor) >= (1, 4):
