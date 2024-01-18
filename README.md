@@ -92,18 +92,20 @@ constrain compilation and test execution to a certain amount of concurrency.
 
 ## Valgrind and Sanitizers
 
-When `--define:danger` test builds are part of the matrix, we will also attempt
-valgrind runs against the tests to check for memory errors and races. If
-`valgrind` is not found in the path, we will attempt to use the compiler's
-sanitizer library instead.
+When `--define:danger` test builds are part of the matrix, we will also
+attempt runtime analysis on the tests to check for memory errors and races. If
+`valgrind` is found in the environment, it can be used as well.
 
-You can add arguments to the valgrind invocations by setting the
-`BALLS_VALGRIND_FLAGS` variable in the environment.
+### Compile-time Toggles:
+  - `--define:ballsUseValgrind=off` to never use valgrind
+  - `--define:ballsUseSanitizers=off` to never use sanitizers
 
-To explicitly disable valgrind in favor of the compiler's sanitizers, build the
-`balls` executable with `--define:ballsUseValgrind=off`. You can also enable or
-disable valgrind use by setting the `BALLS_VALGRIND` boolean in your process
-environment.
+### Environmental Variables:
+  - `BALLS_VALGRIND_FLAGS` a string of arguments to add to valgrind
+  - `BALLS_VALGRIND` a boolean to enable or disable valgrind use
+  - `BALLS_SANITIZERS` a boolean to enable or disable sanitizer use
+
+Simi
 
 ## Test Library Usage
 

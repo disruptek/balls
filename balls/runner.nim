@@ -31,6 +31,7 @@ const
   ballsFailFast* {.booldefine.} = true ##
   ## if true, quit early on a test failure
   ballsUseValgrind* {.booldefine.} = true ##
+  ballsUseSanitizers* {.booldefine.} = true ##
   ## if true, attempt to use valgrind in preference to asan/tsan
   ballsPatterns* {.strdefine.} = "glob" ##
   ## pattern matching style; "glob" or "regex"
@@ -79,8 +80,9 @@ type
     fn*: string
 
 const
-  anCompilerInvocation* = {Execution, ASanitizer, TSanitizer}
   anValgrindInvocation* = {Valgrind, Helgrind, DataRacer}
+  anSanitizerInvocation* = {ASanitizer, TSanitizer}
+  anCompilerInvocation* = {Execution} + anSanitizerInvocation
 
 proc hash*(p: Profile): Hash =
   ## Two Profiles that `hash` identically share a test result in the Matrix.
@@ -253,6 +255,7 @@ let nimExecutable = findExe"nim"
 let valgrindExecutable = findExe"valgrind"
 let useValgrind = "" != valgrindExecutable and
   parseBool(getEnv("BALLS_VALGRIND", $ballsUseValgrind))
+let useSanitizers = parseBool(getEnv("BALLS_SANITIZERS", $ballsUseSanitizers))
 
 proc options*(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
@@ -312,7 +315,7 @@ proc nonsensical*(an: Analyzer): bool =
   ## certain analyzers need not be attempted
   if an in anValgrindInvocation and not useValgrind:
     true
-  elif an in {ASanitizer, TSanitizer} and useValgrind and not ci:
+  elif an in anSanitizerInvocation and not useSanitizers and not ci:
     true
   elif an != Execution and danger notin opt:
     true
@@ -328,8 +331,6 @@ proc nonsensical*(p: Profile): bool =
   elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
     true
   elif p.an.nonsensical:
-    true
-  elif p.gc == vm and p.an in anValgrindInvocation:
     true
   elif p.an != Execution and p.opt notin {danger}:
     true
