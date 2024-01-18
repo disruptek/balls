@@ -421,6 +421,8 @@ func nonsensical(p: Profile): bool =
     true
   elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
     true
+  elif defined(isNimSkull) and p.gc in {refc, markAndSweep}:
+    true
   else:
     false
 
