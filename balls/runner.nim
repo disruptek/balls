@@ -423,6 +423,8 @@ func nonsensical(p: Profile): bool =
     true
   elif defined(isNimSkull) and p.gc in {refc, markAndSweep}:
     true
+  elif defined(isNimSkull) and p.be in {cpp}:
+    true
   else:
     false
 
