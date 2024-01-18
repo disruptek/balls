@@ -2,10 +2,12 @@
 
 [![Test Matrix](https://github.com/disruptek/balls/workflows/CI/badge.svg)](https://github.com/disruptek/balls/actions?query=workflow%3ACI)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/balls?style=flat)](https://github.com/disruptek/balls/releases/latest)
-![Minimum supported Nim version](https://img.shields.io/badge/nim-1.0.11%2B-informational?style=flat&logo=nim)
+![Minimum supported Nim version](https://img.shields.io/badge/nim-1.7.3%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/disruptek/balls?style=flat)](#license)
 
-A unittest macro to save the world, or at least your Sunday.
+This project contains two things:
+- a unit test dsl that helps debug tests that do not compile
+- a test runner that smartly expands the test matrix
 
 ## Why?
 
