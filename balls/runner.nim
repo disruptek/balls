@@ -281,6 +281,10 @@ proc options*(p: Profile): seq[string] =
   params = filteredOptimizer params
   params = filteredBackend params
 
+  when defined(isNimSkull):
+    if not params.parameter("threads:off"):
+      params.add "--threads:on"
+
   # and otherwise pass those options on to the compiler
   result.add params
 

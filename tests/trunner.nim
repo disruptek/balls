@@ -4,9 +4,6 @@ when defined(js):
 elif defined(NimScript):
   echo "unsupported on nimscript"
   quit 0
-elif defined(isNimSkull):
-  echo "unsupported on nimskull"
-  quit 0
 else:
   import std/algorithm
 
