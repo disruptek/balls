@@ -788,7 +788,7 @@ proc profiles*(fn: string): seq[Profile] =
                   result.add profile
 
 when ballsPatterns == "regex":
-  const testPattern* = "tests(/[^/]+)*/t.*"
+  const directoryPattern = "(/[^/]+)*/t.*"
   type Pattern = Regex
   proc makePattern*(pattern: string): Pattern =
     ## Compile a regex pattern.
@@ -797,7 +797,7 @@ when ballsPatterns == "regex":
     ## Determine if a filename is unmasked by a regex.
     filename.normalPath.find(pattern).isSome
 else:
-  const testPattern* = "tests/**/t*"
+  const directoryPattern = "/**/t*"
   type Pattern = Glob
   proc makePattern*(patt: string): Pattern =
     ## Compile a glob pattern.
@@ -805,6 +805,7 @@ else:
   proc doesMatch*(filename: string; patt: Pattern): bool =
     ## Determine if a filename is unmasked by a glob.
     filename.normalPath.matches patt
+const testPattern* = "tests" & directoryPattern
 
 proc ordered*(directory: string; pattern: Pattern): seq[string] =
   ## Order a `directory` tree of test files recursively,
@@ -826,10 +827,19 @@ proc ordered*(directory: string; pattern: Pattern): seq[string] =
 
 proc main*(patt: string) =
   ## Run each of `pattern`-matching tests.
+  var tests: seq[string]
   # compile the pattern matcher
-  let pattern = makePattern patt
-  # first check the tests sub-directory
-  var tests = ordered("tests", pattern)
+  var pattern = makePattern patt
+  if patt.dirExists:
+    # the pattern is a directory; assume it's tests-like
+    pattern = makePattern(patt & directoryPattern)
+    tests = ordered(patt, pattern)
+  elif patt.fileExists:
+    # the pattern is a file; assume it's a test
+    tests = @[patt]
+  else:
+    # check the tests sub-directory
+    tests = ordered("tests", pattern)
   try:
     # if we've found no tests so far,
     if tests.len == 0:
