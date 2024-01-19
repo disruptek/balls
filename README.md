@@ -46,7 +46,7 @@ runtime will try to guess how to test your project regardless of its structure,
 but you can help narrow what it chooses to compile by...
 
 - placing files matching `t*.nim` under a `tests` subdirectory, or
-- simply letting balls test all the files in the current directory, or
+- specifying the test directory or filename, or
 - passing a single argument to balls which is expanded via globbing:
 
 ```
