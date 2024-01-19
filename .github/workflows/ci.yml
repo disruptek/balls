@@ -42,7 +42,7 @@ jobs:
           - name: nim
             version: version-1-0
           - name: nimskull
-            version: '*'
+            version: '^0.1.0-dev.21160'
         exclude:
           - os: windows-latest
             compiler:
