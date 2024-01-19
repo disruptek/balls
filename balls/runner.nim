@@ -19,7 +19,6 @@ import std/times
 import pkg/insideout
 import pkg/cps
 import pkg/ups/sanitize
-import pkg/ups/config
 import pkg/ups/paths
 
 import balls/spec
@@ -33,8 +32,15 @@ const
   ballsUseValgrind* {.booldefine.} = true ##
   ballsUseSanitizers* {.booldefine.} = true ##
   ## if true, attempt to use valgrind in preference to asan/tsan
-  ballsPatterns* {.strdefine.} = "glob" ##
-  ## pattern matching style; "glob" or "regex"
+
+when defined(isNimSkull):
+  const
+    ballsPatterns* {.strdefine.} = "regex" ##
+    ## pattern matching style; "glob" or "regex"
+else:
+  const
+    ballsPatterns* {.strdefine.} = "glob" ##
+    ## pattern matching style; "glob" or "regex"
 
 when ballsPatterns == "regex":
   import std/nre except toSeq
@@ -391,7 +397,7 @@ proc matrixTable*(matrix: Matrix): string =
       if p in matrix:
         let status = matrix[p]
         row.add:
-          if useColor:
+          if style.useColor:
             $statusStyles[status] & $status
           else:
             $status
@@ -587,8 +593,8 @@ proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
   assert not p.nonsensical
   let echoHints = getEnv"BALLS_HINTS" != ""
-  let hintFree = p.commandLine(withHints = echoHints).toSeq
-  let commands = p.commandLine(withHints = true).toSeq
+  let hintFree = toSeq commandLine(p, withHints = echoHints)
+  let commands = toSeq commandLine(p, withHints = true)
   for index in 0..commands.high:
     if load pleaseCrash:
       result = Skip
