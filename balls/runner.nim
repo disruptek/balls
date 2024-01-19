@@ -239,7 +239,9 @@ proc hints*(p: Profile; ci: bool): string =
   omit = @[]
   if ci:
     # remove spam from ci logs
-    omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
+    omit.add ["UnusedImport", "ProveInit"]
+    when not defined(isNimSkull):
+      omit.add "CaseTransition"
     when (NimMajor, NimMinor) >= (1, 2):
       omit.add "ObservableStores"
     when (NimMajor, NimMinor) >= (1, 4):
@@ -418,6 +420,10 @@ func nonsensical(p: Profile): bool =
   elif p.be in {js, e} and p.gc != vm:
     true
   elif p.fn == changeFileExt(p.fn, "nims") and p.gc != vm:
+    true
+  elif defined(isNimSkull) and p.gc in {refc, markAndSweep}:
+    true
+  elif defined(isNimSkull) and p.be in {cpp}:
     true
   else:
     false
