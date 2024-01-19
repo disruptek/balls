@@ -365,9 +365,13 @@ iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
 
 proc matrixTable*(matrix: Matrix): string =
   ## Render the `matrix` as a table.
+  when defined(isNimSkull):
+    const version = "nimskull"
+  else:
+    const version = "nim-" & NimVersion
   var matrix = matrix
   var tab = Tabouli()
-  tab.headers = @["nim-" & NimVersion, "", ""]
+  tab.headers = @[version, "", ""]
   tab.freeze = len tab.headers
   for an in Analyzer.items:
     case an
