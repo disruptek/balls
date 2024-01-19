@@ -782,7 +782,7 @@ proc profiles*(fn: string): seq[Profile] =
                   result.add profile
 
 when ballsPatterns == "regex":
-  const testPattern* = "tests/.*/t.*"
+  const testPattern* = "tests(/[^/]+)*/t.*"
   type Pattern = Regex
   proc makePattern*(pattern: string): Pattern =
     ## Compile a regex pattern.
