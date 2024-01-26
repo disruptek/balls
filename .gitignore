@@ -2,3 +2,4 @@ deps
 nimblemeta.json
 bin/
 nim.cfg
+.tool-versions
