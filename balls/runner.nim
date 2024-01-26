@@ -426,9 +426,12 @@ proc hints*(p: Profile; ci: bool): seq[string] =
   ## `p`, `ci` status, and compile-time Nim version information.
   var omit = @["Cc", "Link", "Conf", "Processing", "Exec", "Name",
                "XDeclaredButNotUsed"]
-  if ci or p.opt notin {danger}:
-    # ignore performance warnings outside of local danger builds
-    omit.add "Performance"
+  if ci:
+    if p.opt notin {danger}:
+      # ignore performance warnings outside of local danger builds
+      omit.add "Performance"
+    when defined(isNimSkull):
+      omit.add "LineTooLong"
   for hint in omit.items:
     result.add "--hint[$#]=off" % [ hint ]
 
@@ -436,8 +439,10 @@ proc hints*(p: Profile; ci: bool): seq[string] =
   omit = @[]
   if ci:
     # remove spam from ci logs
-    omit.add ["UnusedImport", "ProveInit", "CaseTransition"]
-    omit.add ["ObservableStores", "UnreachableCode", "BareExcept"]
+    omit.add ["UnusedImport", "ProveInit", "ObservableStores",
+              "UnreachableCode"]
+    when not defined(isNimSkull):
+      omit.add ["CaseTransition", "BareExcept"]
   for warning in omit.items:
     result.add "--warning[$#]=off" % [ warning ]
 
