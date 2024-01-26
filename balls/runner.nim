@@ -28,22 +28,16 @@ import balls
 
 const
   ballsFailFast* {.booldefine.} = true ##
-  ## if true, quit early on a test failure
+  ## if true (default), quit early on a test failure
   ballsUseValgrind* {.booldefine.} = true ##
+  ## if true (default), attempt to use compiler sanitizers
   ballsUseSanitizers* {.booldefine.} = true ##
-  ## if true, attempt to use valgrind in preference to asan/tsan
-
-when defined(isNimSkull):
-  const
-    ballsPatterns* {.strdefine.} = "regex" ##
-    ## pattern matching style; "glob" or "regex"
-else:
-  const
-    ballsPatterns* {.strdefine.} = "glob" ##
-    ## pattern matching style; "glob" or "regex"
+  ## if true (default), attempt to use valgrind
+  ballsPatterns* {.strdefine.} = "glob" ##
+  ## pattern matching style; "glob" (default) or "regex"
 
 when ballsPatterns == "regex":
-  import std/nre except toSeq
+  import pkg/regex
 else:
   import pkg/glob
 
@@ -802,13 +796,13 @@ proc profiles*(fn: string): seq[Profile] =
 
 when ballsPatterns == "regex":
   const directoryPattern = "(/[^/]+)*/t.*"
-  type Pattern = Regex
+  type Pattern = Regex2
   proc makePattern*(pattern: string): Pattern =
     ## Compile a regex pattern.
-    Pattern: re(pattern & "\\.nim$")
+    Pattern: re2(pattern & "\\.nim$")
   proc doesMatch*(filename: string; pattern: Pattern): bool =
     ## Determine if a filename is unmasked by a regex.
-    filename.normalPath.find(pattern).isSome
+    pattern in filename.normalPath
 else:
   const directoryPattern = "/**/t*"
   type Pattern = Glob
