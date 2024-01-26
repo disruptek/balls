@@ -262,10 +262,16 @@ proc options*(p: Profile): seq[string] =
 
   # add a memory management option if appropriate
   if p.gc != vm:
-    when defined(isNimSkull):
-      result.add "--gc:" & $p.gc
+    if ci:
+      # skip the spam when on ci
+      when defined(isNimSkull):
+        result.add "--gc:" & $p.gc
+      else:
+        result.add "--mm:" & $p.gc
     else:
-      result.add "--mm:" & $p.gc
+      # use a switch which will likely work and merely spam
+      # mainline nim users with, "hey, we now use --gc:..."
+      result.add "--gc:" & $p.gc
 
   # grab the user's overrides provided on the command-line
   var params = parameters()
