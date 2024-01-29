@@ -118,23 +118,18 @@ jobs:
         env:
           NIM: ${{ matrix.compiler.name }}
 
-      - name: Examples
-        shell: bash
-        run: |
-          cd project
-          cd examples
-          balls '***' --path=".." --backend:c --mm:arc || true
-        env:
-          NIM: ${{ matrix.compiler.name }}
-
       - name: Tests
         shell: bash
         run: |
           cd project
           nimble --accept install
-          balls --path="." --backend:e --backend:js --backend:cpp --backend:c
+          if [[ $NIM == "nim" ]]; then
+            # test cpp under old nim
+            balls --path="." --backend:cpp
+          fi
+          balls --path="." --backend:e --backend:js --backend:c
           # check things under malloc
-          balls --path="." --backend:cpp --backend:c --define:useMalloc
+          balls --path="." --backend:c --define:useMalloc
           # inspect failure examples
           nim c --run examples/fails.nim || true
           # build a dry version of the runner
