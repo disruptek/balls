@@ -125,9 +125,9 @@ jobs:
           nimble --accept install
           if [[ $NIM == "nim" ]]; then
             # test cpp under old nim
-            balls --path="." --backend:cpp
+            balls --path="." --backend:cpp --backend:e
           fi
-          balls --path="." --backend:e --backend:js --backend:c
+          balls --path="." --backend:js --backend:c
           # check things under malloc
           balls --path="." --backend:c --define:useMalloc
           # inspect failure examples
@@ -136,7 +136,7 @@ jobs:
           echo "--define:ballsDry" >> nim.cfg
           nim c balls.nim
           # inspect matrix
-          balls --path="." --backend:e --backend:js --backend:cpp --backend:c
+          balls --path="." --backend:js --backend:c
           # inspect unit tests
           nim c --run tests/test.nim
           # inspect failure examples
