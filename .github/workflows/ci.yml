@@ -133,11 +133,14 @@ jobs:
           # inspect failure examples
           nim c --run examples/fails.nim || true
           # build a dry version of the runner
-          nim c --define:ballsDry balls.nim
+          echo "--define:ballsDry" >> nim.cfg
+          nim c balls.nim
           # inspect matrix
           balls --path="." --backend:e --backend:js --backend:cpp --backend:c
           # inspect unit tests
           nim c --run tests/test.nim
+          # inspect failure examples
+          nim c --run examples/fails.nim || true
 
       - name: Docs
         if: ${{ matrix.docs }} == 'true'
