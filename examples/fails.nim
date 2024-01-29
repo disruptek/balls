@@ -1,5 +1,11 @@
 import balls
 
+proc very() =
+  raise IOError.newException "unexpected error!"
+
+proc unhappy() =
+  very()
+
 suite "suite balls":
 
   block goats:
@@ -102,4 +108,9 @@ suite "suite balls":
 
   block dashed_expectations:
     expect ValueError:
-      check false, "the truth hurts, but not as much as the false"
+      unhappy()
+
+  ## nothing to see here
+  template empty = discard
+  block:
+    empty
