@@ -158,11 +158,11 @@ proc localPath*(fn: string): string =
       result = relativePath(fn, getProjectPath())
   else:
     when defined(js):
-      block:
+      block done:
         when (NimMajor, NimMinor) >= (1, 4):
           try:
             result = relativePath(fn, getCurrentDir())
-            break
+            break done
           except ValueError:
             # "specified root is not absolute"; cwd probably unavailable
             discard

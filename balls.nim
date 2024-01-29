@@ -1,5 +1,4 @@
 import std/colors
-import std/genasts
 import std/macros
 import std/options
 import std/os
@@ -302,7 +301,7 @@ proc renderStackEntry*(s: StackTraceEntry; lineMap: Option[LineMap]): string =
   colorized.add $resetStyle
   result = withColor(bland, colorized , bland)
 
-proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
+proc renderStack(prefix: string; stack: seq[StackTraceEntry]) {.used.} =
   ## stylishly render a stack trace
   var cf: string
   var result: seq[string]
@@ -345,6 +344,7 @@ proc renderSource(t: Test): NimNode =
 
 when defined(nimscript):
   # under nimscript, we don't have a good way to enqueue a result code
+  import std/genasts
   proc setExitCode(t: Test; code = QuitFailure): NimNode =
     let warning =
       t.output: newLit"(balls exits on first failure under nimscript)"
@@ -361,11 +361,13 @@ elif defined(js):
 elif false:
   # other backends use the modern get|set-ProgramResult routines
   import std/exitprocs
+  import std/genasts
   proc setExitCode(t: Test; code = QuitFailure): NimNode =
     genAstOpt({}, code):
       setProgramResult max(code, getProgramResult())
 else:
   import std/atomics
+  import std/genasts
 
   type
     Grenade = object
