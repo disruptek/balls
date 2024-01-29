@@ -375,16 +375,18 @@ else:
 
   when defined(isNimSkull):
     proc `=destroy`(grenade: var Grenade) =
-      quit grenade.exitCode.load
+      quit load(grenade.exitCode)
   else:
     proc `=destroy`(grenade: Grenade) =
-      quit grenade.exitCode.load
+      let p = addr grenade.exitCode
+      quit load(p[])
 
   var grenade = Grenade()
 
   proc setExitCode(t: Test; code = QuitFailure): NimNode =
     genAstOpt({}, code=code.ord, g=bindSym"grenade"):
-      g.exitCode.store(max(g.exitCode.load, code))
+      # cas this later
+      discard fetchAdd(g.exitCode, code)
 
 proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
   ## what to do when a test fails
