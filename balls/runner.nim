@@ -838,26 +838,28 @@ proc ordered*(directory: string; pattern: Pattern): seq[string] =
     proc byAge(a, b: string): int = system.cmp(a.age, b.age)
     result.sort(byAge, Descending)
 
-proc main*(patt: string) =
+proc main*(patts: openArray[string]) =
   ## Run each of `pattern`-matching tests.
   var tests: seq[string]
-  # compile the pattern matcher
-  var pattern = makePattern patt
-  if patt.dirExists:
-    # the pattern is a directory; assume it's tests-like
-    pattern = makePattern(patt & directoryPattern)
-    tests = ordered(patt, pattern)
-  elif patt.fileExists:
-    # the pattern is a file; assume it's a test
-    tests = @[patt]
-  else:
-    # check the tests sub-directory
-    tests = ordered("tests", pattern)
+  for patt in patts.items:
+    # compile the pattern matcher
+    var pattern = makePattern patt
+    if patt.dirExists:
+      # the pattern is a directory; assume it's tests-like
+      pattern = makePattern(patt & directoryPattern)
+      tests &= ordered(patt, pattern)
+    elif patt.fileExists:
+      # the pattern is a file; assume it's a test
+      tests &= @[patt]
+    else:
+      # check the tests sub-directory
+      tests &= ordered("tests", pattern)
   try:
     # if we've found no tests so far,
+    var patt = "." & directoryPattern
     if tests.len == 0:
       # try to find tests from the current directory
-      tests = ordered(".", pattern)
+      tests = ordered(".", makePattern patt)
     if tests.len == 0:
       checkpoint "no tests found for '" & patt & "'; that's good, right?"
       quit 0
