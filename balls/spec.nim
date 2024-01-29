@@ -43,8 +43,8 @@ const
 
 when ballsDry:
   const
-    emojiStack*  = " ^ "
-    emojiSource* = " > "
+    emojiStack*  = "^"
+    emojiSource* = ">"
   type
     StatusKind* = enum      ## possible test results
       None = " "      ## (undefined)
@@ -60,8 +60,8 @@ when ballsDry:
 
 else:
   const
-    emojiStack*  = " 🗇 "
-    emojiSource* = " 🗏 "
+    emojiStack*  = "🗇"
+    emojiSource* = "🗏"
   type
     StatusKind* = enum      ## possible test results
       None = "  "          ## (undefined)
@@ -78,7 +78,6 @@ else:
 type
   FailError* = object of CatchableError
   SkipError* = object of CatchableError
-  ExpectedError* = object of CatchableError
 
   Test* = object
     status*: StatusKind    ## the result of the test

@@ -3,8 +3,8 @@ import std/genasts
 import std/macros
 import std/options
 import std/os
-import std/sequtils
 import std/strutils except align, alignLeft
+import std/tables
 import std/times
 from std/unicode import align, alignLeft
 
@@ -17,7 +17,9 @@ import balls/spec
 import balls/style
 export checkpoint
 
-export FailError, ExpectedError, SkipError
+export FailError, SkipError
+
+const LNcols = 5  # how many columns to reserve for line numbers
 
 type
   Rewrite = proc(n: NimNode): NimNode
@@ -81,14 +83,21 @@ proc prefixLines(s: string; p: string): string =
   for line in items(splitLines(s, keepEol = true)):
     result.add p & line
 
-proc numberLines(s: string; first = 1): NimNode =
+proc numberLinesCT(s: string; first = 1): NimNode =
   ## prefix each line of multiline input with a rendered line number
   result = newStmtList()
   for n, line in pairs(splitLines(s, keepEol = true)):
-    var ln = lineNumStyle & align($(n + first), 3).newLit
+    var ln = lineNumStyle & align($(n + first), LNcols).newLit
     ln = infix(ln, "&", "  ".newLit)
     ln = infix(ln, "&", sourceStyle & line.newLit)
     result.add ln
+
+proc numberLinesRT(s: string; first = 1): seq[string] =
+  ## prefix each line of multiline input with a rendered line number
+  for n, line in pairs(splitLines(s, keepEol = true)):
+    result.add:
+      "$1$2$3  $4$5" % [ $resetStyle, $lineNumStyle, align($(n + first), LNcols),
+                        $sourceStyle, line ]
 
 proc output(t: Test; n: NimNode): NimNode =
   assert not n.isNil
@@ -143,10 +152,7 @@ proc revealSymbol(n: NimNode): NimNode =
           newLit": ",
           newLit repr(typ),
           newLit" = ",
-          when defined(gcArc) or defined(gcOrc):
-            newLit"(unsupported on arc/orc)"
-          else:
-            newCall(ident"repr", n)
+          newCall(ident"repr", n)
         ]
   of nskProc, nskFunc:
     result = reveal.newCall:
@@ -249,20 +255,23 @@ proc success(t: var Test): NimNode =
   result.add t.incResults
   result.add t.output(successStyle & newLit(t.name))
 
-proc fromFileGetLine(file: string; line: int): string =
-  ## TODO: optimize this expensive fetch
-  when defined(js):
-    result = "(unsupported on js)"
-  else:
+type
+  LN = int
+  FN = cstring
+  LineMap = Table[LN, string]
+  FileLineMap = Table[FN, Option[LineMap]]
+# if you're here because filename isn't a cstring or line number isn't an int... 😦
+
+proc getLineMapFromFile(file: StackTraceEntry.filename): Option[LineMap] =
+  when not defined(js):
+    let file = $file
     if file.fileExists:
-      let lines = toSeq lines(file)
-      if line - 1 < lines.high:
-        result = lines[line - 1]
-      else:
-        result = "(line not found)"
-    else:
-      #result = "(not found: $#)" % [ file ]
-      result = "(file not found)"
+      result = some default(LineMap)
+      var i: LN
+      inc i  # files start with line 1
+      for line in file.lines:
+        result.get[i] = line
+        inc i
 
 proc findWhere(s: string; p: string; into: var string): bool {.used.} =
   ## find the location of a substring and, if found, produce empty prefix
@@ -270,22 +279,50 @@ proc findWhere(s: string; p: string; into: var string): bool {.used.} =
   if result:
     into = spaces(s.find(p))
 
+proc renderStackEntry*(s: StackTraceEntry; lineMap: Option[LineMap]): string =
+  ## render a stacktrace entry nicely; "progressive enhancement"
+  var source: Option[string]
+  if lineMap.isSome:
+    if s.line in lineMap.get:
+      source = some lineMap.get[s.line]
+  var bland {.used.}: string
+  var colorized {.used.}: string = $resetStyle
+  if source.isSome:
+    bland.add "$1  " % [ get source ]
+    colorized.add "$1$2  " % [ $sourceStyle, get source ]
+  if 0 < len $s.procname:
+    bland.add "# $1()" % [ $s.procname ]
+    colorized.add "$1# $2$3()" % [ $lineNumStyle, $viaProcStyle, $s.procname ]
+  if 0 == s.line:
+    bland = align("?", LNcols) & "  " & bland
+    colorized = align("?", LNcols) & "  " & colorized
+  else:
+    bland = numberLinesRT(bland, s.line)[0]
+    colorized = numberLinesRT(colorized, s.line)[0]
+  colorized.add $resetStyle
+  result = withColor(bland, colorized , bland)
+
 proc renderStack(prefix: string; stack: seq[StackTraceEntry]) =
   ## stylishly render a stack trace
   var cf: string
   var result: seq[string]
+  var fileLineMap: FileLineMap
+  let prefix = prefix & " " & emojiStack
   for s in stack.items:
+    # did the filename change?
     if cf != $s.filename:
       cf = $s.filename
-      result.add renderFilename(s)
-    let code = fromFileGetLine(cf, s.line)
-    let line = align($s.line, 5)
-    result.add:
-      renderStackEntry(s, line, code)
-  checkpoint result.join("\n").prefixLines prefix & emojiStack
+      # get any missing line map for the file
+      if s.filename notin fileLineMap:
+        fileLineMap[s.filename] = getLineMapFromFile(s.filename)
+      # add a line rendering the changed filename
+      result.add " " & renderFilename(s)
+      # add the source code rendered with line number
+      result.add renderStackEntry(s, fileLineMap[s.filename])
+  checkpoint prefixLines(result.join("\n"), prefix)
 
 proc renderTrace(t: Test; n: NimNode = nil): NimNode =
-  ## output the stack trace of a test, and perhaps that of any exception
+  ## output the stack trace of a test, and perhaps that of an exception
   when defined(js) or defined(nimscript):
     result = newEmptyNode()
   else:
@@ -304,7 +341,7 @@ proc renderSource(t: Test): NimNode =
     if node[0].kind == nnkCommentStmt:
       let dropFirst = node[0].strVal.splitLines(keepEol = true)[1..^1].join("")
       node[0] = newCommentStmtNode(dropFirst)
-  result = t.output(repr(node).numberLines(info.line).prefixLines emojiSource)
+  result = t.output(repr(node).numberLinesCT(info.line).prefixLines emojiSource)
 
 when defined(nimscript):
   # under nimscript, we don't have a good way to enqueue a result code
@@ -321,12 +358,19 @@ elif defined(js):
   var exitCode {.importjs: "process.$1".}: cint
   proc setExitCode(t: Test; code = QuitFailure): NimNode =
     newAssignment(bindSym"exitCode", code.newLit)
-else:
+elif false:
   # other backends use the modern get|set-ProgramResult routines
   import std/exitprocs
   proc setExitCode(t: Test; code = QuitFailure): NimNode =
     genAstOpt({}, code):
       setProgramResult max(code, getProgramResult())
+else:
+  import std/atomics
+
+  var exitCode: Atomic[int]
+  proc setExitCode(t: Test; code = QuitFailure): NimNode =
+    genAstOpt({}, code=code.ord, ex=bindSym"exitCode"):
+      store(ex, max(load ex, code))
 
 proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
   ## what to do when a test fails
@@ -397,13 +441,7 @@ template expect*(exception: typed; body: untyped) =
         body
       except exception:
         break expected
-      except ExpectedError as e:
-        fail e.msg
-      except CatchableError as e:
-        checkpoint "$#: $#" % [ $e.name, e.msg ]
-        fail "expected $# but caught $#" % [ $exception, $e.name ]
-      raise newException ExpectedError:
-        "expected $# exception" % [ $exception ]
+      fail "expected $# exception" % [ $exception ]
 
 proc reportResults(): NimNode =
   ## produce a small legend showing result totals
@@ -739,13 +777,13 @@ macro test*(name: string; body: untyped) =
 when isMainModule:
   import balls/runner
 
-  proc firstNonOptionArgument(args: openArray[string]): Option[string] =
+  proc nonOptionArguments(args: openArray[string]): seq[string] =
     for arg in args.items:
       if not arg.startsWith("-"):
-        return some arg
+        result.add arg
 
-  let pattern = firstNonOptionArgument commandLineParams()
-  if pattern.isSome:      # search using the provided pattern,
-    main(get pattern)
+  let patterns = nonOptionArguments commandLineParams()
+  if 0 < patterns.len:
+    main(patterns)        # search using the provided patterns,
   else:                   # or the default pattern
-    main(testPattern)
+    main([testPattern])
