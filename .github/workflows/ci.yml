@@ -26,9 +26,9 @@ jobs:
       # for them.
       - if: github.event_name != 'pull_request'
         name: Checkout (if not PR)
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -55,55 +55,112 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        nim: [devel]
-    name: '${{ matrix.os }} (${{ matrix.nim }})'
+        compiler:
+          - name: nim
+            version: devel
+          - name: nimskull
+            version: "*"
+            docs: true
+    name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }})"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: project
 
-      - name: Setup Nim
+      - name: Compiler (nim)
+        if: matrix.compiler.name == 'nim'
         uses: alaviss/setup-nim@0.1.1
         with:
           path: nim
-          version: ${{ matrix.nim }}
+          version: ${{ matrix.compiler.version }}
 
-      - name: Run tests
+      - name: Compiler (nimskull)
+        id: nimskull
+        if: matrix.compiler.name == 'nimskull'
+        uses: alaviss/setup-nimskull@f6e8ade8ac51191024616216e5da0ee968d9da48
+        with:
+          nimskull-version: ${{ matrix.compiler.version }}
+
+      - name: Fetch Nimble
+        if: matrix.compiler.name == 'nimskull'
+        uses: actions/checkout@v4
+        with:
+          path: nimble
+          repository: alaviss/nimble
+          ref: nimskull
+
+      - name: Build Nimble
+        if: matrix.compiler.name == 'nimskull'
+        shell: bash
+        run: |
+          cd nimble
+          nim c -d:release -o:nimble src/nimble.nim
+          cp nimble "$NIMSKULL_BIN/nimble"
+          # Add nimble binary folder to PATH too
+          echo "$HOME/.nimble/bin" >> $GITHUB_PATH
+        env:
+          NIMSKULL_BIN: ${{ steps.nimskull.outputs.binPath }}
+
+#      - name: Valgrind
+#        shell: bash
+#        run: |
+#          sudo apt-get update
+#          sudo apt install --fix-missing valgrind
+
+      - name: Dependencies
+        shell: bash
+        run: |
+          cd project
+          nimble --accept develop
+          nimble --accept install "https://github.com/disruptek/balls"
+        env:
+          NIM: ${{ matrix.compiler.name }}
+
+      - name: Tests
         shell: bash
         run: |
           cd project
           nimble --accept install
-          balls --path="." --backend:e --backend:js --backend:cpp --backend:c --define:forceRegexAtRuntime
-          # build a dry version
-          nim c --define:ballsDry balls.nim
+          if [[ $NIM == "nim" ]]; then
+            # test cpp under old nim
+            balls --path="." --backend:cpp --backend:e
+          fi
+          balls --path="." --backend:js --backend:c
+          # inspect failure examples
+          nim c --run examples/fails.nim || true
+          # build a dry version of the runner
+          echo "--define:ballsDry" >> nim.cfg
+          nim c balls.nim
           # inspect matrix
-          balls --path="." --backend:e --backend:js --backend:cpp --backend:c --define:forceRegexAtRuntime
+          balls --path="." --backend:js --backend:c
           # inspect unit tests
           nim c --run tests/test.nim
+          # inspect failure examples
+          nim c --run examples/fails.nim || true
 
-      - name: Build docs
-        if: matrix.os == 'ubuntu-latest' && matrix.nim == 'unsupported'
-        shell: bash
-        run: |
-          cd project
-          branch=${{ github.ref }}
-          branch=${branch##*/}
-          nimble doc --project --path="." --outdir:docs \
-            '--git.url:https://github.com/${{ github.repository }}' \
-            '--git.commit:${{ github.sha }}' \
-            "--git.devel:$branch" \
-            balls.nim
-          # Ignore failures for older Nim
-          cp docs/{the,}index.html || true
-
-      - name: Publish docs
-        if: >
-          github.event_name == 'push' && github.ref == 'refs/heads/master' &&
-          matrix.os == 'ubuntu-latest' && matrix.nim == 'unsupported'
-        uses: crazy-max/ghaction-github-pages@v1
-        with:
-          build_dir: project/docs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Docs
+#        if: ${{ matrix.docs }} == 'true'
+#        shell: bash
+#        run: |
+#          cd project
+#          branch=${{ github.ref }}
+#          branch=${branch##*/}
+#          nimble doc --project --path="." --outdir:docs \
+#            '--git.url:https://github.com/${{ github.repository }}' \
+#            '--git.commit:${{ github.sha }}' \
+#            "--git.devel:$branch" \
+#            balls.nim
+#          # Ignore failures for older Nim
+#          cp docs/{the,}index.html || true
+#
+#      - name: Pages
+#        if: >
+#          github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+#          matrix.os == 'ubuntu-latest' && matrix.docs == 'true'
+#        uses: crazy-max/ghaction-github-pages@v1
+#        with:
+#          build_dir: project/docs
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

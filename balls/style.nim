@@ -39,10 +39,10 @@ else:
 when not dynamicColor:
   when not useColor:
     # shim defines from terminal...
-    template ansiStyleCode(x: untyped): string = ""
-    template ansiForegroundColorCode(x: untyped; bool = true): string = ""
-    template ansiBackgroundColorCode(x: untyped; bool = true): string = ""
-    const ansiResetCode = ""
+    template ansiStyleCode(x: untyped): string {.used.} = ""
+    template ansiForegroundColorCode(x: untyped; bool = true): string {.used.} = ""
+    template ansiBackgroundColorCode(x: untyped; bool = true): string {.used.} = ""
+    const ansiResetCode {.used.} = ""
 
 const
   resetStyle*      = ansiResetCode.Styling
@@ -137,6 +137,11 @@ when dynamicColor:
       else:
         c
 
+  template withColor*(a, b: untyped): untyped =
+    ## second argument is run when color is enabled,
+    ## first argument is run otherwise.
+    withColor(a, b, a)
+
   template `$`*(n: Styling): string =
     withColor("", n.string & resetStyle.string, "")
   proc `&`*(style: Styling; n: NimNode): NimNode =
@@ -176,28 +181,26 @@ macro report*(n: string) =
     genAstOpt({}, bland, colorized):
       withColor(bland, colorized, bland)
 
-proc renderFilename*(s: LineInfo): string =
+proc renderFilename*(filename: string): string =
   ## render a filename nicely
-  let bland {.used.} = localPath($s.filename)
-  let colorized {.used.} =
-    "$1$3$2$1" % [ $resetStyle, localPath($s.filename), $viaFileStyle ]
+  let path = localPath(filename)
+  let bland {.used.} = path
+  let colorized {.used.} = "$1$2$3$1" % [ $resetStyle, $viaFileStyle, path ]
+  result = withColor(bland, colorized, bland)
+
+proc renderFilename*(s: LineInfo): string =
+  renderFilename $s.filename
+
+proc renderLine*(line: int): string =
+  ## render a line number nicely
+  let bland {.used.} = $line
+  let colorized {.used.} = "$1$2$3$1" % [ $resetStyle, $lineNumStyle, $line,
+                                          $resetStyle ]
   result = withColor(bland, colorized, bland)
 
 proc renderFilenameAndLine*(s: LineInfo): string =
   ## render a filename and line number nicely
-  let bland {.used.} = "$1 line $2" % [ localPath($s.filename), $s.line ]
-  let colorized {.used.} =
-    "$1$2$3$1$4 line $5$1" % [ $resetStyle, $viaFileStyle,
-                               localPath($s.filename), $commentStyle, $s.line ]
-  result = withColor(bland, colorized, bland)
-
-proc renderStackEntry*(s: StackTraceEntry; line, code: string): string =
-  ## render a stacktrace entry nicely
-  let bland {.used.} = "$1 $2  # $3()" % [ line, code, $s.procname]
-  let colorized {.used.} =
-    "$1$5$2 $6$3  $7# $4()$1" % [ $resetStyle, line, code, $s.procname,
-                                  $lineNumStyle, $sourceStyle, $viaProcStyle ]
-  result = withColor(bland, colorized, bland)
+  renderFilename($s.filename) & " " & renderLine(s.line)
 
 proc comment*(n: NimNode): NimNode =
   ## render a comment with the given stringish node
