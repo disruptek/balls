@@ -801,7 +801,8 @@ proc profiles*(fn: string): seq[Profile] =
                   result.add profile
 
 when ballsPatterns == "regex":
-  const directoryPattern = "(/[^/]+)*/t.*"
+  const directoryPattern = "(/[^/]+)*/.*"
+  const testDirPattern = "(/[^/]+)*/t.*"
   type Pattern = Regex2
   proc makePattern*(pattern: string): Pattern =
     ## Compile a regex pattern.
@@ -810,7 +811,8 @@ when ballsPatterns == "regex":
     ## Determine if a filename is unmasked by a regex.
     pattern in filename.normalPath
 else:
-  const directoryPattern = "/**/t*"
+  const directoryPattern = "/***"
+  const testDirPattern = "/**/t*"
   type Pattern = Glob
   proc makePattern*(patt: string): Pattern =
     ## Compile a glob pattern.
@@ -818,7 +820,7 @@ else:
   proc doesMatch*(filename: string; patt: Pattern): bool =
     ## Determine if a filename is unmasked by a glob.
     filename.normalPath.matches patt
-const testPattern* = "tests" & directoryPattern
+const testPattern* = "tests" & testDirPattern
 
 proc ordered*(directory: string; pattern: Pattern): seq[string] =
   ## Order a `directory` tree of test files recursively,
@@ -841,23 +843,33 @@ proc ordered*(directory: string; pattern: Pattern): seq[string] =
 proc main*(patts: openArray[string]) =
   ## Run each of `pattern`-matching tests.
   var tests: seq[string]
-  for patt in patts.items:
-    # compile the pattern matcher
-    var pattern = makePattern patt
-    if patt.dirExists:
-      # the pattern is a directory; assume it's tests-like
-      pattern = makePattern(patt & directoryPattern)
-      tests &= ordered(patt, pattern)
-    elif patt.fileExists:
-      # the pattern is a file; assume it's a test
-      tests &= @[patt]
-    else:
-      # check the tests sub-directory
-      tests &= ordered("tests", pattern)
+  var pattern: Pattern
+  if 0 == patts.len:
+    echo "test pattern tests"
+    pattern = makePattern testPattern
+  else:
+    for patt in patts.items:
+      echo "pattern: ", patt
+      # compile the pattern matcher
+      if patt.dirExists:
+        # the pattern is a directory; assume it's NOT tests-like
+        pattern = makePattern(patt & directoryPattern)
+        echo "directory pattern"
+        tests &= ordered(patt, pattern)
+        echo tests
+      elif patt.fileExists:
+        # the pattern is a file; assume it's a test
+        tests &= @[patt]
+      else:
+        # check the tests sub-directory
+        pattern = makePattern patt
+        tests &= ordered("tests", pattern)
+        echo "tests tests"
   try:
     # if we've found no tests so far,
     var patt = "." & directoryPattern
     if tests.len == 0:
+      echo "directory tests: " & patt
       # try to find tests from the current directory
       tests = ordered(".", makePattern patt)
     if tests.len == 0:
