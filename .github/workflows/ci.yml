@@ -142,27 +142,27 @@ jobs:
           # inspect failure examples
           nim c --run examples/fails.nim || true
 
-      - name: Docs
-        if: ${{ matrix.docs }} == 'true'
-        shell: bash
-        run: |
-          cd project
-          branch=${{ github.ref }}
-          branch=${branch##*/}
-          nimble doc --project --path="." --outdir:docs \
-            '--git.url:https://github.com/${{ github.repository }}' \
-            '--git.commit:${{ github.sha }}' \
-            "--git.devel:$branch" \
-            balls.nim
-          # Ignore failures for older Nim
-          cp docs/{the,}index.html || true
-
-      - name: Pages
-        if: >
-          github.event_name == 'push' && github.ref == 'refs/heads/master' &&
-          matrix.os == 'ubuntu-latest' && matrix.docs == 'true'
-        uses: crazy-max/ghaction-github-pages@v1
-        with:
-          build_dir: project/docs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Docs
+#        if: ${{ matrix.docs }} == 'true'
+#        shell: bash
+#        run: |
+#          cd project
+#          branch=${{ github.ref }}
+#          branch=${branch##*/}
+#          nimble doc --project --path="." --outdir:docs \
+#            '--git.url:https://github.com/${{ github.repository }}' \
+#            '--git.commit:${{ github.sha }}' \
+#            "--git.devel:$branch" \
+#            balls.nim
+#          # Ignore failures for older Nim
+#          cp docs/{the,}index.html || true
+#
+#      - name: Pages
+#        if: >
+#          github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+#          matrix.os == 'ubuntu-latest' && matrix.docs == 'true'
+#        uses: crazy-max/ghaction-github-pages@v1
+#        with:
+#          build_dir: project/docs
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
