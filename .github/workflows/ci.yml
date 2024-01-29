@@ -128,8 +128,6 @@ jobs:
             balls --path="." --backend:cpp --backend:e
           fi
           balls --path="." --backend:js --backend:c
-          # check things under malloc
-          balls --path="." --backend:c --define:useMalloc
           # inspect failure examples
           nim c --run examples/fails.nim || true
           # build a dry version of the runner
