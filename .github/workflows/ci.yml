@@ -103,11 +103,11 @@ jobs:
         env:
           NIMSKULL_BIN: ${{ steps.nimskull.outputs.binPath }}
 
-      - name: Valgrind
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt install --fix-missing valgrind
+#      - name: Valgrind
+#        shell: bash
+#        run: |
+#          sudo apt-get update
+#          sudo apt install --fix-missing valgrind
 
       - name: Dependencies
         shell: bash
