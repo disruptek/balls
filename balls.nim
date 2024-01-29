@@ -367,10 +367,18 @@ elif false:
 else:
   import std/atomics
 
-  var exitCode: Atomic[int]
+  type
+    Grenade = object
+      exitCode: Atomic[int]
+
+  proc `=destroy`(grenade: var Grenade) =
+    quit grenade.exitCode.load
+
+  var grenade = Grenade()
+
   proc setExitCode(t: Test; code = QuitFailure): NimNode =
-    genAstOpt({}, code=code.ord, ex=bindSym"exitCode"):
-      store(ex, max(load ex, code))
+    genAstOpt({}, code=code.ord, g=bindSym"grenade"):
+      g.exitCode.store(max(g.exitCode.load, code))
 
 proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
   ## what to do when a test fails
