@@ -373,8 +373,12 @@ else:
     Grenade = object
       exitCode: Atomic[int]
 
-  proc `=destroy`(grenade: var Grenade) =
-    quit grenade.exitCode.load
+  when defined(isNimSkull):
+    proc `=destroy`(grenade: var Grenade) =
+      quit grenade.exitCode.load
+  else:
+    proc `=destroy`(grenade: Grenade) =
+      quit grenade.exitCode.load
 
   var grenade = Grenade()
 
