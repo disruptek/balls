@@ -35,7 +35,7 @@ suite "a pretty suite shim":
   inc r
   check r > 0
   ## this is a nice comment
-  type TypesAreNotTests = bool
+  type TypesAreNotTests {.used.} = bool
   ## there's really nothing else to say
   const VariablesDefinedOutsideBlocksAreNotTests {.used.} = true
 
