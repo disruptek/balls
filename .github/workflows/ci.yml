@@ -83,12 +83,20 @@ jobs:
         with:
           version: ${{ matrix.compiler.version }}
 
-      - if: matrix.compiler.name == 'nimskull'
-        name: Nimble
+      - name: Fetch Nimble
+        if: matrix.compiler.name == 'nimskull'
+        uses: actions/checkout@v4
+        with:
+          path: nimble
+          repository: alaviss/nimble
+          ref: nimskull
+
+      - name: Build Nimble
+        if: matrix.compiler.name == 'nimskull'
         shell: bash
         run: |
           cd nimble
-          nim c --define:release --output:nimble src/nimble.nim
+          nim c -d:release -o:nimble src/nimble.nim
           cp nimble "$NIMSKULL_BIN/nimble"
           # Add nimble binary folder to PATH too
           echo "$HOME/.nimble/bin" >> $GITHUB_PATH
