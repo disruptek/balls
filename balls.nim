@@ -16,7 +16,7 @@ import balls/spec
 import balls/style
 export checkpoint
 
-export FailError, SkipError
+export FailError, SkipError, ExpectedError
 
 const LNcols = 5  # how many columns to reserve for line numbers
 
