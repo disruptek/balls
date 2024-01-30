@@ -35,6 +35,8 @@ const
   ## if true (default), attempt to use valgrind
   ballsPatterns* {.strdefine.} = "glob" ##
   ## pattern matching style; "glob" (default) or "regex"
+  ballsSmokeTest* {.strdefine.} = "debug"  ##
+  ## default optimizations for smoke test (`balls` without options)
 
 when ballsPatterns == "regex":
   import pkg/regex
@@ -216,8 +218,21 @@ var opt* = {
 # use the optimizations specified on the command-line
 var specifiedOpt = specifiedOptimizer(parameters()).toSet
 if specifiedOpt == {}:
-  # no optimizations were specified; omit debug
-  opt.del debug
+  if ci:
+    # no optimizations were specified; omit debug
+    opt.del debug
+  else:
+    # smoke-test; `balls` run without optimization switches
+    case try: parseEnum[Optimizer](ballsSmokeTest) except ValueError: debug
+    of debug:
+      opt.del release
+      opt.del danger
+    of release:
+      opt.del debug
+      opt.del danger
+    of danger:
+      opt.del debug
+      opt.del release
 else:
   # if optimizations were specified, remove any (not) specified
   let removeOpts = toSeq(Optimizer.items).toSet - specifiedOpt
