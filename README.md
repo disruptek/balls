@@ -47,12 +47,13 @@ but you can help narrow what it chooses to compile by...
 
 - placing files matching `t*.nim` under a `tests` subdirectory, or
 - specifying the test directory or filename, or
-- passing a single argument to balls which is expanded via globbing:
+- passing arguments to balls which are expanded via globbing:
 
 ```
-$ balls 'examples/***' # test all files anywhere beneath examples sub-directory
-$ balls 'tests/tfoo' # test the tests/tfoo.nim
-$ balls '**/trunner' # test trunner.nim wherever it may live
+$ balls 'examples/***'  # test all files anywhere beneath examples sub-directory
+$ balls experiments     # test all files below the experiments sub-directory
+$ balls tests/tfoo      # test the tests/tfoo.nim
+$ balls '**/trunner'    # test trunner.nim wherever it may live
 ```
 
 You can `--define:ballsPatterns=regex` to use regular expressions in these
