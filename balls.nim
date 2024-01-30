@@ -803,7 +803,4 @@ when isMainModule:
         result.add arg
 
   let patterns = nonOptionArguments commandLineParams()
-  if 0 < patterns.len:
-    main(patterns)        # search using the provided patterns,
-  else:                   # or the default pattern
-    main([testPattern])
+  main(patterns)        # search using the provided patterns, if any

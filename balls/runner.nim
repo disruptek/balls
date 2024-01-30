@@ -101,7 +101,7 @@ proc short(fn: string): string =
   case short
   of "t":
     "t"  # 🙄
-  elif short.startsWith("test"):
+  elif short.startsWith("test") or short[0] != 't':
     short # okay, buddy
   else:
     short[1..short.high]
@@ -801,7 +801,8 @@ proc profiles*(fn: string): seq[Profile] =
                   result.add profile
 
 when ballsPatterns == "regex":
-  const directoryPattern = "(/[^/]+)*/t.*"
+  const directoryPattern = "(/[^/]+)*/.*"
+  const testDirPattern = "(/[^/]+)*/t.*"
   type Pattern = Regex2
   proc makePattern*(pattern: string): Pattern =
     ## Compile a regex pattern.
@@ -810,7 +811,8 @@ when ballsPatterns == "regex":
     ## Determine if a filename is unmasked by a regex.
     pattern in filename.normalPath
 else:
-  const directoryPattern = "/**/t*"
+  const directoryPattern = "/***"
+  const testDirPattern = "/**/t*"
   type Pattern = Glob
   proc makePattern*(patt: string): Pattern =
     ## Compile a glob pattern.
@@ -818,7 +820,7 @@ else:
   proc doesMatch*(filename: string; patt: Pattern): bool =
     ## Determine if a filename is unmasked by a glob.
     filename.normalPath.matches patt
-const testPattern* = "tests" & directoryPattern
+const testPattern* = "tests" & testDirPattern
 
 proc ordered*(directory: string; pattern: Pattern): seq[string] =
   ## Order a `directory` tree of test files recursively,
@@ -838,35 +840,51 @@ proc ordered*(directory: string; pattern: Pattern): seq[string] =
     proc byAge(a, b: string): int = system.cmp(a.age, b.age)
     result.sort(byAge, Descending)
 
-proc main*(patts: openArray[string]) =
-  ## Run each of `pattern`-matching tests.
-  var tests: seq[string]
-  for patt in patts.items:
-    # compile the pattern matcher
-    var pattern = makePattern patt
-    if patt.dirExists:
-      # the pattern is a directory; assume it's tests-like
-      pattern = makePattern(patt & directoryPattern)
-      tests &= ordered(patt, pattern)
-    elif patt.fileExists:
-      # the pattern is a file; assume it's a test
-      tests &= @[patt]
-    else:
-      # check the tests sub-directory
-      tests &= ordered("tests", pattern)
+proc findDefaultTests*(): seq[string] =
+  ## Find the default tests from the current directory; tests, or all source files.
+  var pattern: Pattern
+  pattern = makePattern testPattern
+  result = ordered("tests", pattern)
   try:
     # if we've found no tests so far,
-    var patt = "." & directoryPattern
-    if tests.len == 0:
+    let patt = "." & directoryPattern
+    if result.len == 0:
       # try to find tests from the current directory
-      tests = ordered(".", makePattern patt)
-    if tests.len == 0:
-      checkpoint "no tests found for '" & patt & "'; that's good, right?"
-      quit 0
+      result = ordered(".", makePattern patt)
   except OSError as e:
     checkpoint "bad news about the current directory... it's gone?"
     checkpoint "the os says `$#`" % [ e.msg ]
     quit 1
+
+proc findTestsViaPatterns*(patts: openArray[string]): seq[string] =
+  ## Find tests from the current directory which match patterns.
+  var pattern: Pattern
+  for patt in patts.items:
+    if patt.dirExists:
+      # the pattern is a directory; assume it's NOT tests-like
+      pattern = makePattern(patt & directoryPattern)
+      result &= ordered(patt, pattern)
+    elif patt.fileExists:
+      # the pattern is a file; assume it's a test
+      result &= @[patt]
+    else:
+      # perform a pattern search from the current directory
+      pattern = makePattern patt
+      result &= ordered(".", pattern)
+
+proc main*(patts: openArray[string]) =
+  ## Run each of `pattern`-matching tests, if provided, else run the default tests.
+  var tests: seq[string]
+  if 0 == patts.len:
+    tests = findDefaultTests()
+    if tests.len == 0:
+      checkpoint "no tests found; that's good, right?"
+      quit 0
+  else:
+    tests = findTestsViaPatterns(patts)
+    if tests.len == 0:
+      checkpoint "no tests found for patterns:", repr(patts)
+      quit 0
 
   # generate profiles for the ordered inputs
   var profiles: seq[Profile]
