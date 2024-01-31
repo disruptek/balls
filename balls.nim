@@ -137,11 +137,7 @@ proc revealSymbol(n: NimNode): NimNode =
         newStmtList: [
           niceKind n,
           newLit" = ",
-          newLit repr(n),
-          when defined(gcArc) or defined(gcOrc):
-            newLit"(unsupported on arc/orc)"
-          else:
-            newCall(ident"repr", n)
+          newCall(ident"repr", n)
         ]
   of nskVar, nskLet, nskParam, nskForVar, nskResult, nskConst:
     let typ = getType n
@@ -155,7 +151,10 @@ proc revealSymbol(n: NimNode): NimNode =
           newLit": ",
           newLit repr(typ),
           newLit" = ",
-          newCall(ident"repr", n)
+          when defined(gcArc) or defined(gcOrc):
+            newLit"(unsupported on arc/orc)"
+          else:
+            newCall(ident"repr", n)
         ]
   of nskProc, nskFunc:
     result = reveal.newCall:
