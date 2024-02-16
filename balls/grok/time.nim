@@ -37,19 +37,20 @@ converter toIso8601*(input: string): DateTime =
 
 proc shortDuration*(d: Duration): string =
   ## cast a duration to a nice, short string
-  let
-    n = d.inNanoseconds
-  var
-    t = {
-       "s": (n div 1_000_000_000) mod 1_000,
-      "ms": (n div 1_000_000) mod 1_000,
-      "μs": (n div 1_000) mod 1_000,
-      "ns": (n div 1) mod 1_000,
-    }
+  let n = d.inNanoseconds
+  if n == 0:
+    return "n/a"
+  var t = {
+     "s": (n div 1_000_000_000) mod 1_000,
+    "ms": (n div 1_000_000) mod 1_000,
+    "μs": (n div 100_000) mod 1_000,
+    "ns": (n div 1) mod 1_000,
+  }
   for i, n in pairs(t):
     if n[1] > 0:
-      return "$1.$2$3" % [ $n[1], $(t[i+1][1] div 100), n[0] ]
-  result = "n/a"
+      case i
+      of 3: return "$1$2" % [ $n[1], n[0] ]
+      else: return "$1.$2$3" % [ $n[1], $(t[i+1][1] div 100), n[0] ]
 
 proc ft*(d: Duration): string {.raises: [].} =
   ## cast a duration to a nice string
