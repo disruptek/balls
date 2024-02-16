@@ -66,6 +66,7 @@ type
     Execution  = "execute"
     ASanitizer = "asan"
     TSanitizer = "tsan"
+    USanitizer = "usan"
     Valgrind   = "memcheck"
     Helgrind   = "helgrind"
     DataRacer  = "drd"
@@ -83,7 +84,7 @@ type
 
 const
   anValgrindInvocation* = {Valgrind, Helgrind, DataRacer}
-  anSanitizerInvocation* = {ASanitizer, TSanitizer}
+  anSanitizerInvocation* = {ASanitizer, TSanitizer, USanitizer}
   anCompilerInvocation* = {Execution} + anSanitizerInvocation
 
 proc hash*(p: Profile): Hash =
@@ -333,6 +334,9 @@ proc options*(p: Profile): seq[string] =
   of TSanitizer:
     result.add """--passC:"-fsanitize=thread""""
     result.add """--passL:"-fsanitize=thread""""
+  of USanitizer:
+    result.add """--passC:"-fsanitize=undefined""""
+    result.add """--passL:"-fsanitize=undefined""""
   else:
     discard
 
@@ -469,7 +473,7 @@ proc cache*(p: Profile): string =
 
   let opt =
     case p.an
-    of ASanitizer, TSanitizer:
+    of ASanitizer, TSanitizer, USanitizer:
       $p.an                      # asan/tsan are essentially optimizations
     else:
       $p.opt                     # valgrind/helgrind/drd reuse executables
