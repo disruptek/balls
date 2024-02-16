@@ -1,13 +1,19 @@
 # balls
 
-[![Test Matrix](https://github.com/disruptek/balls/workflows/CI/badge.svg)](https://github.com/disruptek/balls/actions?query=workflow%3ACI)
+[![CI](https://github.com/disruptek/balls/actions/workflows/ci.yml/badge.svg)](https://github.com/disruptek/balls/actions/workflows/ci.yml)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/balls?style=flat)](https://github.com/disruptek/balls/releases/latest)
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.7.3%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/disruptek/balls?style=flat)](#license)
 
+## TL;DR
+
 This project contains two things:
 - a unit test dsl that helps debug tests that do not compile
 - a test runner that smartly expands the test matrix
+
+The continuous integration tests include demonstration of all available
+functionality and output:
+[![CI](https://github.com/disruptek/balls/actions/workflows/ci.yml/badge.svg)](https://github.com/disruptek/balls/actions/workflows/ci.yml)
 
 ## Why?
 
@@ -50,9 +56,11 @@ but you can help narrow what it chooses to compile by...
 - passing arguments to balls which are expanded via globbing:
 
 ```
+$ balls                 # run a quick `--define:debug` matrix
 $ balls 'examples/***'  # test all files anywhere beneath examples sub-directory
 $ balls experiments     # test all files below the experiments sub-directory
 $ balls tests/tfoo      # test the tests/tfoo.nim
+$ balls tests/tfoo.nim  # test the tests/tfoo.nim
 $ balls '**/trunner'    # test trunner.nim wherever it may live
 ```
 
@@ -83,6 +91,13 @@ $ balls --backend:c --define:danger
 # ... tests are run only with the c backend, and danger optimizations ...
 ```
 
+Note that `--define:debug` is like `--undefine:release --undefine:danger`.
+
+```
+$ balls --backend:cpp --define:debug
+# ... tests are run only with the c++ backend, without optimizations ...
+```
+
 By default, failing tests that are expected to pass will cause
 early termination of the test runner, skipping any remaining test
 invocations. You can disable this behavior by building `balls` with
@@ -93,9 +108,12 @@ constrain compilation and test execution to a certain amount of concurrency.
 
 ## Valgrind and Sanitizers
 
-When `--define:danger` test builds are part of the matrix, we will also
-attempt runtime analysis on the tests to check for memory errors and races. If
-`valgrind` is found in the environment, it can be used as well.
+When `--define:danger` test builds are part of the matrix, we will also attempt
+runtime analysis on the tests to check for memory errors, data races, and
+undefined behavior. If `valgrind` is found in the environment, it can be used
+as well.
+
+Currently, failures of these test runs won't fail the test matrix.
 
 ### Compile-time Toggles:
   - `--define:ballsUseValgrind=off` to never use valgrind
@@ -105,8 +123,6 @@ attempt runtime analysis on the tests to check for memory errors and races. If
   - `BALLS_VALGRIND_FLAGS` a string of arguments to add to valgrind
   - `BALLS_VALGRIND` a boolean to enable or disable valgrind use
   - `BALLS_SANITIZERS` a boolean to enable or disable sanitizer use
-
-Simi
 
 ## Test Library Usage
 

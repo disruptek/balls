@@ -114,7 +114,7 @@ jobs:
         run: |
           cd project
           nimble --accept develop
-          nimble --accept install "https://github.com/disruptek/balls"
+          nimble --accept install
         env:
           NIM: ${{ matrix.compiler.name }}
 
@@ -122,21 +122,67 @@ jobs:
         shell: bash
         run: |
           cd project
-          nimble --accept install
           if [[ $NIM == "nim" ]]; then
             # test cpp under old nim
             balls --path="." --backend:cpp --backend:e
           fi
           balls --path="." --backend:js --backend:c
-          # inspect failure examples
+
+          # rm spam from the unittest output examples
+          echo "--hint[Link]:off" >> nim.cfg
+          echo "--hint[Exec]:off" >> nim.cfg
+          echo "--hint[Processing]:off" >> nim.cfg
+          echo "--hint[Conf]:off" >> nim.cfg
+          echo "--hint[Cc]:off" >> nim.cfg
+          echo "--hint[ConvFromXtoItselfNotNeeded]:off" >> nim.cfg
+          echo "--hint[SuccessX]:off" >> nim.cfg
+          echo "--warning[User]:off" >> nim.cfg
+          echo "--warning[Deprecated]:off" >> nim.cfg
+          echo "--define:ballsAuditTimeSpace" >> nim.cfg
+          echo "--debugger:native" >> nim.cfg
+          echo "--stacktrace:on" >> nim.cfg
+          echo "--define:useMalloc" >> nim.cfg
+
+      - name: Sample Success
+        shell: bash
+        run: |
+          cd project
+          # inspect success example
+          nim c --run tests/test.nim
+
+      - name: Sample Failure
+        shell: bash
+        run: |
+          cd project
+          # inspect failure example
           nim c --run examples/fails.nim || true
+
+      - name: Dry Rebuild
+        shell: bash
+        run: |
+          cd project
           # build a dry version of the runner
           echo "--define:ballsDry" >> nim.cfg
           nim c balls.nim
+
+      - name: Dry Matrix
+        shell: bash
+        run: |
+          cd project
           # inspect matrix
           balls --path="." --backend:js --backend:c
+
+      - name: Dry Success
+        shell: bash
+        run: |
+          cd project
           # inspect unit tests
           nim c --run tests/test.nim
+
+      - name: Dry Failure
+        shell: bash
+        run: |
+          cd project
           # inspect failure examples
           nim c --run examples/fails.nim || true
 

@@ -3,14 +3,14 @@ import std/macros
 import std/os
 import std/times
 
-import grok
+import balls/grok
 
 const
   ballsAuditTimeSpace* {.booldefine.} =
     defined(danger) and not defined(nimscript)
 
 when ballsAuditTimeSpace:
-  import grok/mem
+  import balls/grok/mem
   export quiesceMemory
 
 const hasPanics* =

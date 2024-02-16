@@ -7,11 +7,11 @@ import std/tables
 import std/times
 from std/unicode import align, alignLeft
 
-import pkg/grok
-import pkg/grok/time
-import pkg/grok/kute
 import pkg/ups/sanitize
 
+import balls/grok
+import balls/grok/time
+import balls/grok/kute
 import balls/spec
 import balls/style
 export checkpoint
@@ -508,7 +508,7 @@ proc ctor(test: Test): NimNode =
     when value isnot ref:
       result.add composeColon(ident(name), value)
 
-when defined(danger):
+when ballsAuditTimeSpace:
   proc pad(n: NimNode; size: int): NimNode =
     let align = bindSym"align"
     result = newCall(align, newCall(bindSym"$", n), size.newLit)

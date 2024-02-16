@@ -2,8 +2,7 @@ import std/genasts
 import std/macros
 import std/strutils
 
-import grok
-
+import balls/grok
 import balls/spec
 
 type
