@@ -114,7 +114,7 @@ jobs:
         run: |
           cd project
           nimble --accept develop
-          nimble --accept install "https://github.com/disruptek/balls"
+          nimble --accept install
         env:
           NIM: ${{ matrix.compiler.name }}
 
@@ -122,7 +122,6 @@ jobs:
         shell: bash
         run: |
           cd project
-          nimble --accept install
           if [[ $NIM == "nim" ]]; then
             # test cpp under old nim
             balls --path="." --backend:cpp --backend:e
