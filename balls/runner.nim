@@ -337,6 +337,8 @@ proc options*(p: Profile): seq[string] =
   of USanitizer:
     result.add """--passC:"-fsanitize=undefined""""
     result.add """--passL:"-fsanitize=undefined""""
+    result.add """--passC:"-fno-sanitize-recover=undefined""""
+    result.add """--passL:"-fno-sanitize-recover=undefined""""
   else:
     discard
 
