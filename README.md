@@ -106,8 +106,6 @@ attempt runtime analysis on the tests to check for memory errors and races. If
   - `BALLS_VALGRIND` a boolean to enable or disable valgrind use
   - `BALLS_SANITIZERS` a boolean to enable or disable sanitizer use
 
-Simi
-
 ## Test Library Usage
 
 Here's a set of example tests which will pass (and fail) in interesting ways.
