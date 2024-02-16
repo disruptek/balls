@@ -508,7 +508,7 @@ proc ctor(test: Test): NimNode =
     when value isnot ref:
       result.add composeColon(ident(name), value)
 
-when defined(danger):
+when ballsAuditTimeSpace:
   proc pad(n: NimNode; size: int): NimNode =
     let align = bindSym"align"
     result = newCall(align, newCall(bindSym"$", n), size.newLit)
