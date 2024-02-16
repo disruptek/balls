@@ -135,6 +135,7 @@ jobs:
           echo "--hint[Conf]:off" >> nim.cfg
           echo "--hint[Cc]:off" >> nim.cfg
           echo "--hint[ConvFromXtoItselfNotNeeded]:off" >> nim.cfg
+          echo "--hint[SuccessX]:off" >> nim.cfg
           echo "--warning[User]:off" >> nim.cfg
           echo "--warning[Deprecated]:off" >> nim.cfg
           echo "--define:ballsAuditTimeSpace" >> nim.cfg
