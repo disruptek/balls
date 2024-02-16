@@ -128,6 +128,20 @@ jobs:
           fi
           balls --path="." --backend:js --backend:c
 
+          # rm spam from the unittest output examples
+          echo "--hint[Link]:off" >> nim.cfg
+          echo "--hint[Exec]:off" >> nim.cfg
+          echo "--hint[Processing]:off" >> nim.cfg
+          echo "--hint[Conf]:off" >> nim.cfg
+          echo "--hint[Cc]:off" >> nim.cfg
+          echo "--hint[ConvFromXtoItselfNotNeeded]:off" >> nim.cfg
+          echo "--warning[User]:off" >> nim.cfg
+          echo "--warning[Deprecated]:off" >> nim.cfg
+          echo "--define:ballsAuditTimeSpace" >> nim.cfg
+          echo "--debugger:native" >> nim.cfg
+          echo "--stacktrace:on" >> nim.cfg
+          echo "--define:useMalloc" >> nim.cfg
+
       - name: Sample Success
         shell: bash
         run: |
