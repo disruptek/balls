@@ -127,15 +127,47 @@ jobs:
             balls --path="." --backend:cpp --backend:e
           fi
           balls --path="." --backend:js --backend:c
-          # inspect failure examples
+
+      - name: Sample Success
+        shell: bash
+        run: |
+          cd project
+          # inspect success example
+          nim c --run tests/test.nim
+
+      - name: Sample Failure
+        shell: bash
+        run: |
+          cd project
+          # inspect failure example
           nim c --run examples/fails.nim || true
+
+      - name: Dry Rebuild
+        shell: bash
+        run: |
+          cd project
           # build a dry version of the runner
           echo "--define:ballsDry" >> nim.cfg
           nim c balls.nim
+
+      - name: Dry Matrix
+        shell: bash
+        run: |
+          cd project
           # inspect matrix
           balls --path="." --backend:js --backend:c
+
+      - name: Dry Success
+        shell: bash
+        run: |
+          cd project
           # inspect unit tests
           nim c --run tests/test.nim
+
+      - name: Dry Failure
+        shell: bash
+        run: |
+          cd project
           # inspect failure examples
           nim c --run examples/fails.nim || true
 
