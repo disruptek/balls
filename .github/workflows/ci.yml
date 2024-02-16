@@ -155,7 +155,8 @@ jobs:
         run: |
           cd project
           # inspect failure example
-          nim c --run examples/fails.nim || true
+          nim c examples/fails.nim
+          ! examples/fails
 
       - name: Dry Rebuild
         shell: bash
@@ -184,7 +185,8 @@ jobs:
         run: |
           cd project
           # inspect failure examples
-          nim c --run examples/fails.nim || true
+          nim c examples/fails.nim
+          ! examples/fails
 
 #      - name: Docs
 #        if: ${{ matrix.docs }} == 'true'
