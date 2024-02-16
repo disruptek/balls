@@ -50,9 +50,11 @@ but you can help narrow what it chooses to compile by...
 - passing arguments to balls which are expanded via globbing:
 
 ```
+$ balls                 # run a quick `--define:debug` matrix
 $ balls 'examples/***'  # test all files anywhere beneath examples sub-directory
 $ balls experiments     # test all files below the experiments sub-directory
 $ balls tests/tfoo      # test the tests/tfoo.nim
+$ balls tests/tfoo.nim  # test the tests/tfoo.nim
 $ balls '**/trunner'    # test trunner.nim wherever it may live
 ```
 
@@ -83,6 +85,13 @@ $ balls --backend:c --define:danger
 # ... tests are run only with the c backend, and danger optimizations ...
 ```
 
+Note that `--define:debug` is like `--undefine:release --undefine:danger`.
+
+```
+$ balls --backend:cpp --define:debug
+# ... tests are run only with the c++ backend, without optimizations ...
+```
+
 By default, failing tests that are expected to pass will cause
 early termination of the test runner, skipping any remaining test
 invocations. You can disable this behavior by building `balls` with
@@ -93,9 +102,12 @@ constrain compilation and test execution to a certain amount of concurrency.
 
 ## Valgrind and Sanitizers
 
-When `--define:danger` test builds are part of the matrix, we will also
-attempt runtime analysis on the tests to check for memory errors and races. If
-`valgrind` is found in the environment, it can be used as well.
+When `--define:danger` test builds are part of the matrix, we will also attempt
+runtime analysis on the tests to check for memory errors, data races, and
+undefined behavior. If `valgrind` is found in the environment, it can be used
+as well.
+
+Currently, failures of these test runs won't fail the test matrix.
 
 ### Compile-time Toggles:
   - `--define:ballsUseValgrind=off` to never use valgrind
