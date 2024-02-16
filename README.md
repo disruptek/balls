@@ -1,13 +1,19 @@
 # balls
 
-[![Test Matrix](https://github.com/disruptek/balls/workflows/CI/badge.svg)](https://github.com/disruptek/balls/actions?query=workflow%3ACI)
+[![CI](https://github.com/disruptek/balls/actions/workflows/ci.yml/badge.svg)](https://github.com/disruptek/balls/actions/workflows/ci.yml)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/balls?style=flat)](https://github.com/disruptek/balls/releases/latest)
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.7.3%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/disruptek/balls?style=flat)](#license)
 
+## TL;DR
+
 This project contains two things:
 - a unit test dsl that helps debug tests that do not compile
 - a test runner that smartly expands the test matrix
+
+The continuous integration tests include demonstration of all available
+functionality and output:
+[![CI](https://github.com/disruptek/balls/actions/workflows/ci.yml/badge.svg)](https://github.com/disruptek/balls/actions/workflows/ci.yml)
 
 ## Why?
 
