@@ -12,6 +12,7 @@ import std/pathnorm
 import std/sequtils
 import std/sets
 import std/streams
+import std/strformat
 import std/strutils
 import std/tables
 import std/times
@@ -24,6 +25,7 @@ import pkg/ups/paths
 import balls/spec
 import balls/style
 import balls/tabouli
+import balls/grok/time
 import balls
 
 const
@@ -701,6 +703,7 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
   var mail: Update
   var last: MonoTime
   let old = if ci: 5000 else: 500
+  var began: Table[Profile, MonoTime]
   template dirty: untyped = (getMonoTime() - last).inMilliseconds > old
   while true:
     if not box.tryRecv mail:
@@ -716,7 +719,11 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
     else:
       # update the matrix with the profile->status
       tables.`[]=`(matrix, mail.profile, mail.status)
-      if mail.status != Wait:
+      case mail.status
+      of Wait: discard
+      of Runs:
+        began[mail.profile] = getMonoTime()  # remember when we started
+      else:
         # check to see if we should crash
         if matrix.shouldCrash(mail.profile):
           when false:
@@ -724,11 +731,16 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
           pleaseCrash.store true
         elif not pleaseCrash.load:
           reset last
-        if ci:
-          # in ci, if the status is notable or we're not crashing,
-          if not pleaseCrash.load or mail.status notin {Skip, Runs}:
-            # show some matrix progress in case someone is watching
-            checkpoint "$# $#" % [$mail.status, $mail.profile]
+      if ci:
+        # in ci, if the status is notable or we're not crashing,
+        if not pleaseCrash.load or mail.status notin {Skip, Runs, Wait}:
+          # show some matrix progress in case someone is watching
+          case mail.status
+          of Runs:
+            checkpoint fmt"{mail.status} {mail.profile:<66}"
+          elif mail.status > Runs:
+            let took = shortDuration: getMonoTime() - began[mail.profile]
+            checkpoint fmt"{mail.status} {mail.profile:<66} {took:>7}"
       # send control wherever it needs to go next
       discard trampoline(Continuation move mail)
   if dirty():
