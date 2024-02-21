@@ -1,0 +1,12 @@
+nimTitle	balls	balls.html	module balls		0
+nim	checkpoint	balls.html#checkpoint,varargs[string,]	proc checkpoint(ss: varargs[string, `$`])		162
+nim	report	balls.html#report.m,varargs[typed]	macro report(ss: varargs[typed])		298
+nim	check	balls.html#check.m,bool,string	macro check(body: bool; message: string = "")		347
+nim	check	balls.html#check.m,string,untyped	macro check(message: string; body: untyped)		353
+nim	expect	balls.html#expect.t,typed,untyped	template expect(exception: typed; body: untyped)		501
+nim	skip	balls.html#skip,string	proc skip(msg = "skipped")		637
+nim	skip	balls.html#skip.t,string,untyped	template skip(msg = "skipped"; body: untyped)		641
+nim	fail	balls.html#fail,string	proc fail(msg = "failed")		648
+nim	suite	balls.html#suite.m,string,untyped	macro suite(name: string; tests: untyped)		786
+nim	test	balls.html#test.m,string,untyped	macro test(name: string; body: untyped)		848
+nimgrp	check	balls.html#check-macros-all	macro		347

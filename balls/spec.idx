@@ -1,0 +1,29 @@
+nimTitle	spec	balls/spec.html	module balls/spec		0
+nim	setBallsResult	balls/spec.html#setBallsResult,int	proc setBallsResult(q: int)		36
+nim	hasPanics	balls/spec.html#hasPanics	const hasPanics		48
+nim	hasDefects	balls/spec.html#hasDefects	const hasDefects		56
+nim	ballsDry	balls/spec.html#ballsDry	const ballsDry		64
+nim	onCI	balls/spec.html#onCI	const onCI		65
+nim	testable	balls/spec.html#testable	const testable		67
+nim	emojiStack	balls/spec.html#emojiStack	const emojiStack		95
+nim	emojiSource	balls/spec.html#emojiSource	const emojiSource		96
+nim	None	balls/spec.html#None	StatusKind.None		98
+nim	Info	balls/spec.html#Info	StatusKind.Info		98
+nim	Wait	balls/spec.html#Wait	StatusKind.Wait		98
+nim	Runs	balls/spec.html#Runs	StatusKind.Runs		98
+nim	Pass	balls/spec.html#Pass	StatusKind.Pass		98
+nim	Skip	balls/spec.html#Skip	StatusKind.Skip		98
+nim	Part	balls/spec.html#Part	StatusKind.Part		98
+nim	Fail	balls/spec.html#Fail	StatusKind.Fail		98
+nim	Died	balls/spec.html#Died	StatusKind.Died		98
+nim	Oops	balls/spec.html#Oops	StatusKind.Oops		98
+nim	StatusKind	balls/spec.html#StatusKind	enum StatusKind		98
+nim	FailError	balls/spec.html#FailError	object FailError		111
+nim	SkipError	balls/spec.html#SkipError	object SkipError		112
+nim	ExpectedError	balls/spec.html#ExpectedError	object ExpectedError		113
+nim	Test	balls/spec.html#Test	object Test		115
+nim	totalTests	balls/spec.html#totalTests	proc totalTests(): int		126
+nim	init	balls/spec.html#init,Test,string,NimNode	proc init(test: var Test; name: string; code: NimNode)		130
+nim	dollar	balls/spec.html#dollar,NimNode	proc dollar(n: NimNode): NimNode		155
+nim	flushStreams	balls/spec.html#flushStreams	proc flushStreams()		168
+nim	noclobber	balls/spec.html#noclobber.t,untyped	template noclobber(body: untyped)		178

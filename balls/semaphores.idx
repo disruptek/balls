@@ -1,0 +1,16 @@
+nimTitle	semaphores	balls/semaphores.html	module balls/semaphores		0
+nim	Semaphore	balls/semaphores.html#Semaphore	object Semaphore		5
+nim	hash	balls/semaphores.html#hash,Semaphore	proc hash(s: var Semaphore): Hash		10
+nim	initSemaphore	balls/semaphores.html#initSemaphore,Semaphore,int	proc initSemaphore(s: var Semaphore; count: int = 0)		14
+nim	`=destroy`	balls/semaphores.html#=destroy,Semaphore	proc `=destroy`(s: var Semaphore)		20
+nim	`=copy`	balls/semaphores.html#=copy,Semaphore,Semaphore	proc `=copy`(s: var Semaphore; e: Semaphore)		25
+nim	acquire	balls/semaphores.html#acquire,Semaphore	proc acquire(s: var Semaphore)		29
+nim	release	balls/semaphores.html#release,Semaphore	proc release(s: var Semaphore)		33
+nim	withLock	balls/semaphores.html#withLock.t,Semaphore,untyped	template withLock(s: var Semaphore; logic: untyped)		37
+nim	signal	balls/semaphores.html#signal,Semaphore	proc signal(s: var Semaphore)		45
+nim	wait	balls/semaphores.html#wait,Semaphore	proc wait(s: var Semaphore)		51
+nim	available	balls/semaphores.html#available,Semaphore	proc available(s: var Semaphore): int		62
+nim	isReady	balls/semaphores.html#isReady.t,Semaphore	template isReady(s: var Semaphore): untyped		67
+nim	inc	balls/semaphores.html#inc,Semaphore	proc inc(s: var Semaphore)		71
+nim	dec	balls/semaphores.html#dec,Semaphore	proc dec(s: var Semaphore)		76
+nim	withSemaphore	balls/semaphores.html#withSemaphore.t,Semaphore,typed	template withSemaphore(s: var Semaphore; logic: typed): untyped		81

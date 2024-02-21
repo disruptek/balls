@@ -1,0 +1,40 @@
+nimTitle	runner	balls/runner.html	module balls/runner		0
+nim	ballsFailFast	balls/runner.html#ballsFailFast	const ballsFailFast		25
+nim	c	balls/runner.html#c	Backend.c		29
+nim	cpp	balls/runner.html#cpp	Backend.cpp		29
+nim	js	balls/runner.html#js	Backend.js		29
+nim	e	balls/runner.html#e	Backend.e		29
+nim	Backend	balls/runner.html#Backend	enum Backend		29
+nim	debug	balls/runner.html#debug	Optimizer.debug		35
+nim	release	balls/runner.html#release	Optimizer.release		35
+nim	danger	balls/runner.html#danger	Optimizer.danger		35
+nim	Optimizer	balls/runner.html#Optimizer	enum Optimizer		35
+nim	refc	balls/runner.html#refc	MemModel.refc		40
+nim	markAndSweep	balls/runner.html#markAndSweep	MemModel.markAndSweep		40
+nim	arc	balls/runner.html#arc	MemModel.arc		40
+nim	orc	balls/runner.html#orc	MemModel.orc		40
+nim	vm	balls/runner.html#vm	MemModel.vm		40
+nim	MemModel	balls/runner.html#MemModel	enum MemModel		40
+nim	Execution	balls/runner.html#Execution	Analyzer.Execution		47
+nim	ASanitizer	balls/runner.html#ASanitizer	Analyzer.ASanitizer		47
+nim	TSanitizer	balls/runner.html#TSanitizer	Analyzer.TSanitizer		47
+nim	Valgrind	balls/runner.html#Valgrind	Analyzer.Valgrind		47
+nim	Helgrind	balls/runner.html#Helgrind	Analyzer.Helgrind		47
+nim	DataRacer	balls/runner.html#DataRacer	Analyzer.DataRacer		47
+nim	Analyzer	balls/runner.html#Analyzer	enum Analyzer		47
+nim	Matrix	balls/runner.html#Matrix	type Matrix		55
+nim	Profile	balls/runner.html#Profile	object Profile		58
+nim	hash	balls/runner.html#hash,Profile	proc hash(p: Profile): Hash		73
+nim	cmp	balls/runner.html#cmp,Profile,Profile	proc cmp(a, b: Profile): int		98
+nim	`<`	balls/runner.html#<,Profile,Profile	proc `<`(a, b: Profile): bool		106
+nim	`==`	balls/runner.html#==,Profile,Profile	proc `==`(a, b: Profile): bool		111
+nim	contains	balls/runner.html#contains,Matrix,Profile	proc contains(matrix: Matrix; p: Profile): bool		116
+nim	matrixTable	balls/runner.html#matrixTable,Matrix	proc matrixTable(matrix: Matrix): string		176
+nim	hints	balls/runner.html#hints,Profile,bool	proc hints(p: Profile; ci: bool): string		227
+nim	commandLine	balls/runner.html#commandLine,Profile	proc commandLine(p: Profile; withHints = false): string		431
+nim	perform	balls/runner.html#perform,Profile	proc perform(p: Profile): StatusKind		453
+nim	perform	balls/runner.html#perform,Matrix,seq[Profile]	proc perform(matrix: var Matrix; profs: seq[Profile])		540
+nim	profiles	balls/runner.html#profiles,string	proc profiles(fn: string): seq[Profile]		602
+nim	ordered	balls/runner.html#ordered,string	proc ordered(directory: string; testsOnly = true): seq[string]		612
+nim	main	balls/runner.html#main,string	proc main(directory: string; fallback = false)		687
+nimgrp	perform	balls/runner.html#perform-procs-all	proc		453

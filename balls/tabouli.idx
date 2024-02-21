@@ -1,0 +1,3 @@
+nimTitle	tabouli	balls/tabouli.html	module balls/tabouli		0
+nim	Tabouli	balls/tabouli.html#Tabouli	object Tabouli		6
+nim	render	balls/tabouli.html#render,Tabouli,int	proc render(t: Tabouli; size = 1): string		11

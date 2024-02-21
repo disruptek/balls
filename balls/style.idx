@@ -1,0 +1,26 @@
+nimTitle	style	balls/style.html	module balls/style		0
+nim	Styling	balls/style.html#Styling	type Styling		9
+nim	`&`	balls/style.html#&,Styling,Styling	proc `&`(a, b: Styling): Styling		11
+nim	`&`	balls/style.html#&,Styling,string	proc `&`(a: Styling; b: string): Styling		12
+nim	`&`	balls/style.html#&,string,Styling	proc `&`(a: string; b: Styling): Styling		13
+nim	resetStyle	balls/style.html#resetStyle	const resetStyle		27
+nim	resultsStyle	balls/style.html#resultsStyle	const resultsStyle		28
+nim	informStyle	balls/style.html#informStyle	const informStyle		30
+nim	commentStyle	balls/style.html#commentStyle	const commentStyle		31
+nim	lineNumStyle	balls/style.html#lineNumStyle	const lineNumStyle		33
+nim	partialStyle	balls/style.html#partialStyle	const partialStyle		35
+nim	successStyle	balls/style.html#successStyle	const successStyle		36
+nim	oopsStyle	balls/style.html#oopsStyle	const oopsStyle		37
+nim	failureStyle	balls/style.html#failureStyle	const failureStyle		41
+nim	skippedStyle	balls/style.html#skippedStyle	const skippedStyle		42
+nim	exceptionStyle	balls/style.html#exceptionStyle	const exceptionStyle		44
+nim	sourceStyle	balls/style.html#sourceStyle	const sourceStyle		45
+nim	viaProcStyle	balls/style.html#viaProcStyle	const viaProcStyle		46
+nim	viaFileStyle	balls/style.html#viaFileStyle	const viaFileStyle		48
+nim	headerStyle	balls/style.html#headerStyle	const headerStyle		51
+nim	leaderStyle	balls/style.html#leaderStyle	const leaderStyle		54
+nim	statusStyles	balls/style.html#statusStyles	const statusStyles		56
+nim	useColor	balls/style.html#useColor	proc useColor(): bool		82
+nim	`$`	balls/style.html#$,Styling	proc `$`(style: Styling): string		94
+nim	`&`	balls/style.html#&,Styling,NimNode	proc `&`(style: Styling; n: NimNode): NimNode		100
+nimgrp	&	balls/style.html#&-procs-all	proc		11
