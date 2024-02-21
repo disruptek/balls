@@ -58,7 +58,7 @@ proc ft*(d: Duration): string {.raises: [].} =
     n = d.inNanoseconds
     ss = (n div 1_000_000_000) mod 1_000
     ms = (n div 1_000_000) mod 1_000
-    us = (n div 1_000) mod 1_000
+    us = (n div 1_000_000) mod 1_000
     ns = (n div 1) mod 1_000
   try:
     return fmt"{ss:>3}s {ms:>3}ms {us:>3}μs {ns:>3}ns"
