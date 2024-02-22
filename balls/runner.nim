@@ -733,14 +733,13 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
           reset last
       if ci:
         # in ci, if the status is notable or we're not crashing,
-        if not pleaseCrash.load or mail.status notin {Skip, Runs, Wait}:
+        if (not pleaseCrash.load) and mail.status notin {Skip, Wait}:
           # show some matrix progress in case someone is watching
-          case mail.status
-          of Runs:
-            checkpoint fmt"{mail.status} {mail.profile:<66}"
-          elif mail.status > Runs:
+          if mail.status > Runs and mail.profile in began:
             let took = shortDuration: getMonoTime() - began[mail.profile]
             checkpoint fmt"{mail.status} {mail.profile:<66} {took:>7}"
+          else:
+            checkpoint fmt"{mail.status} {mail.profile:<66}"
       # send control wherever it needs to go next
       discard trampoline(Continuation move mail)
   if dirty():
