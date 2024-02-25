@@ -36,6 +36,7 @@ const
   }
 
 when ballsAuditTimeSpace:
+  import balls/grok/time
   var clock: float          # pre-test time
   var memory: int           # pre-test memory
 
