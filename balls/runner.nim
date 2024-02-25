@@ -184,7 +184,7 @@ proc parameter*(switch: string): bool =
 template makeSpecifier(tipe: typedesc[enum]; prefixes: openArray[string]): untyped =
   ## makes filters which sus out specified values corresponding to compiler
   ## options relevant to our matrix of test profiles, as provided via cli.
-  proc `specified tipe`*(params: openArray[string]): seq[tipe] {.used.} =
+  proc `specified tipe`*(params: seq[string]): seq[tipe] {.used.} =
     let params = map(params, toLowerAscii)
     for value in tipe:
       for prefix in prefixes.items:
@@ -192,13 +192,12 @@ template makeSpecifier(tipe: typedesc[enum]; prefixes: openArray[string]): untyp
           result.add value
 
   proc `filtered tipe`*(params: seq[string]): seq[string] {.used.} =
-    var params = params
+    result = params
     for value in tipe:
       for prefix in prefixes:
-        params =
-          params.filterIt:
+        result =
+          result.filterIt:
             it.toLowerAscii != (prefix & $value).toLowerAscii
-    result = params
 
 makeSpecifier(MemModel, ["--gc:", "--mm:"])
 makeSpecifier(Backend, ["-b:", "--backend:"])
