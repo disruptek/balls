@@ -10,7 +10,6 @@ from std/unicode import align, alignLeft
 import pkg/ups/sanitize
 
 import balls/grok
-import balls/grok/time
 import balls/grok/kute
 import balls/spec
 import balls/style
