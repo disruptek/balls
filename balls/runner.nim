@@ -644,6 +644,12 @@ iterator commandLine*(p: Profile; withHints = false): seq[string] =
       yield command
 
 var pleaseCrash: Atomic[bool]
+
+proc pleaseExit(): bool =
+  ## decide whether to exit depending upon ballsFailFast
+  ## and whether any test which shouldPass() has failed
+  ballsFailFast and pleaseCrash.load
+
 let availableProcessors = parseInt getEnv("BALLS_CORES", $countProcessors())
 
 proc perform*(p: Profile): StatusKind =
@@ -653,7 +659,7 @@ proc perform*(p: Profile): StatusKind =
   let hintFree = toSeq commandLine(p, withHints = echoHints)
   let commands = toSeq commandLine(p, withHints = true)
   for index in 0..commands.high:
-    if load pleaseCrash:
+    if pleaseExit():
       result = Skip
       break
     let (output, code) = attempt commands[index]
@@ -687,7 +693,7 @@ proc shouldPass*(p: Profile): bool =
 
 proc shouldCrash(matrix: var Matrix; p: Profile): bool =
   # let the user deny crashes
-  result = ballsFailFast and matrix[p] > Part and p.shouldPass
+  result = matrix[p] > Part and p.shouldPass
   if result:
     # before we fail the ci, run a debug test for shits and grins
     var n = p
@@ -749,11 +755,11 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
           when false:
             setBallsResult int(matrix[p] > Part)
           pleaseCrash.store true
-        elif not pleaseCrash.load:
+        elif not pleaseExit():
           reset last
       if ci:
         # in ci, if the status is notable or we're not crashing,
-        if (not pleaseCrash.load) and mail.status notin {Skip, Wait}:
+        if not pleaseExit() and mail.status notin {Skip, Wait}:
           # show some matrix progress in case someone is watching
           if mail.status > Runs and mail.profile in began:
             let took = shortDuration: getMonoTime() - began[mail.profile]
@@ -822,7 +828,7 @@ proc perform*(profiles: seq[Profile]) =
     workers.send nil.Continuation
 
   # drain the pool
-  while not pool.isEmpty and not pleaseCrash.load:
+  while not pool.isEmpty and not pleaseExit():
     drain pool
   if pleaseCrash.load:
     quit 1
