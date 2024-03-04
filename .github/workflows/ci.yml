@@ -5,9 +5,11 @@ on:
 
   push:
     branches:
-      - master
+      - main
+      - v3
       - v4
       - v5
+      - v6
 
   pull_request:
     branches:
@@ -209,7 +211,7 @@ jobs:
 #
 #      - name: Pages
 #        if: >
-#          github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+#          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
 #          matrix.os == 'ubuntu-latest' && matrix.docs == 'true'
 #        uses: crazy-max/ghaction-github-pages@v1
 #        with:
