@@ -21,6 +21,8 @@ import pkg/insideout
 import pkg/cps
 import pkg/ups/sanitize
 import pkg/ups/paths
+import pkg/ups/compilers
+import pkg/ups/versions
 
 import balls/spec
 import balls/style
@@ -269,10 +271,34 @@ if {e, js} * be != {}:
 var defaults* = @["--incremental:off", "--parallelBuild:1"]
 
 let nimExecutable = findExe"nim"
+var compilerVersion: Option[CompilerVersion]
 let valgrindExecutable = findExe"valgrind"
 let useValgrind = "" != valgrindExecutable and
   parseBool(getEnv("BALLS_VALGRIND", $ballsUseValgrind))
 let useSanitizers = parseBool(getEnv("BALLS_SANITIZERS", $ballsUseSanitizers))
+
+proc shortCompilerVer*(cv: CompilerVersion): string =
+  result = fmt"{cv.language}-{cv.version}"
+  if cv.extra != "":
+    result.add "-"
+    result.add cv.extra
+
+proc shortCompilerVer*(cv: Option[CompilerVersion]): string =
+  if cv.isSome:
+    shortCompilerVer cv.get
+  elif defined(isNimSkull):
+    "nimskull-" & NimVersion
+  else:
+    "nim-" & NimVersion
+
+proc longCompilerVersion*(cv: Option[CompilerVersion]; exe = nimExecutable): string =
+  result = fmt"{cv.shortCompilerVer} in {exe}"
+  if cv.isSome:
+    result.add "\n"
+    result.add fmt"date {get(cv).date} sha1 {get(cv).git}"
+
+proc `$`*(cv: CompilerVersion): string =
+  shortCompilerVer cv
 
 proc options*(p: Profile): seq[string] =
   result = defaults & opt[p.opt]
@@ -391,13 +417,9 @@ iterator rowPermutations(matrix: Matrix; p: Profile): Profile =
 
 proc matrixTable*(matrix: Matrix): string =
   ## Render the `matrix` as a table.
-  when defined(isNimSkull):
-    const version = "nimskull"
-  else:
-    const version = "nim-" & NimVersion
   var matrix = matrix
   var tab = Tabouli()
-  tab.headers = @[version, "", ""]
+  tab.headers = @[shortCompilerVer(compilerVersion), "", ""]
   tab.freeze = len tab.headers
   for an in Analyzer.items:
     case an
@@ -674,10 +696,9 @@ proc shouldCrash(matrix: var Matrix; p: Profile): bool =
       if debug in opt:      # do we even know how?
         discard perform n
         matrix[n] = Info
-    let (s, code) = execCmdEx "$# --version" % [ nimExecutable ]
-    if code == 0:
-      checkpoint "failure; compiler $#:" % [ nimExecutable ]
-      checkpoint s
+    if compilerVersion.isSome:
+      checkpoint "failure; compiler $#" %
+        [ longCompilerVersion(compilerVersion, nimExecutable) ]
     else:
       checkpoint "failure; unable to run compiler $#" % [ nimExecutable ]
 
@@ -916,6 +937,11 @@ proc main*(patts: openArray[string]) =
     if tests.len == 0:
       checkpoint "no tests found for patterns:", repr(patts)
       quit 0
+
+  # see if we can figure out which compiler this is
+  compilerVersion = runCompilerVersion()
+  if compilerVersion.isNone:
+    checkpoint "unable to find/parse compiler --version; continuing..."
 
   # generate profiles for the ordered inputs
   var profiles: seq[Profile]
