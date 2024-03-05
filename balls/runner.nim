@@ -59,7 +59,7 @@ type
     release
     danger
 
-  MemModel* = enum  ## memory managers that we test
+  MemManager* = enum  ## memory managers that we test
     refc
     markAndSweep
     arc
@@ -83,7 +83,7 @@ type
     an*: Analyzer
     be*: Backend
     opt*: Optimizer
-    gc*: MemModel
+    gc*: MemManager
     fn*: string
 
 const
@@ -201,7 +201,7 @@ template makeSpecifier(tipe: typedesc[enum]; prefixes: openArray[string]): untyp
           result.filterIt:
             it.toLowerAscii != (prefix & $value).toLowerAscii
 
-makeSpecifier(MemModel, ["--gc:", "--mm:"])
+makeSpecifier(MemManager, ["--gc:", "--mm:"])
 makeSpecifier(Backend, ["-b:", "--backend:"])
 makeSpecifier(Optimizer, ["-d:", "--define:"])
 
@@ -243,24 +243,12 @@ else:
   for optimizer in removeOpts.items:
     opt.del optimizer
 
-# use the backends specified on the command-line
-var be* = specifiedBackend(parameters()).toSet
-# and if those are omitted, we'll select sensible defaults
-if be == {}:
-  be.incl c                     # always test c
-  if ci:
-    be.incl cpp                 # on ci, add cpp
-    be.incl js                  # on ci, add js
-    be.incl e                   # on ci, add nimscript
+var be*: set[Backend]
 
 # cache the sniffed compiler version
 var compilerVersion: Option[CompilerVersion]
 
-var gc*: set[MemModel]
-
-# if the nimscript or javascript backends are specified, enable the vm
-if {e, js} * be != {}:
-  gc.incl vm
+var gc*: set[MemManager]
 
 # options common to all profiles
 var defaults* = @["--parallelBuild:1"]
@@ -322,7 +310,7 @@ proc options*(p: Profile): seq[string] =
   var params = parameters()
 
   # filter out any "specified" options we've already consumed
-  params = filteredMemModel params
+  params = filteredMemManager params
   params = filteredOptimizer params
   params = filteredBackend params
 
@@ -452,7 +440,7 @@ proc matrixTable*(matrix: Matrix): string =
     var row = @[p.fn.shortPath, $p.be, $p.gc]
     assert row.len == tab.freeze, "counting is hard"
 
-    # then iterate over the memory models and consume any results
+    # then iterate over the memory managers and consume any results
     for p in rowPermutations(matrix, p):
       # pull the run out of the matrix if possible
       # (we can't use pop|take whatfer nim-1.0 reasons)
@@ -862,7 +850,7 @@ proc profiles*(fn: string): seq[Profile] =
         for optimizer in Optimizer.items:
           if optimizer in opt:
             profile.opt = optimizer
-            for memory in MemModel.items:
+            for memory in MemManager.items:
               if memory in gc:
                 profile.gc = memory
                 if not profile.nonsensical:
@@ -940,10 +928,10 @@ proc findTestsViaPatterns*(patts: openArray[string]): seq[string] =
       pattern = makePattern patt
       result &= ordered(".", pattern)
 
-proc setupGC() =
-  # use the memory models specified on the command-line
-  gc = gc + specifiedMemModel(parameters()).toSet
-  # and if those are omitted, we'll select reasonable defaults
+proc setupMemoryManagers() =
+  ## use the memory managers specified on the command-line
+  ## and if those are omitted, select reasonable defaults
+  gc = specifiedMemManager(parameters()).toSet
   if gc == {}:
     case compilerVersion.get.language
     of NimSkull:
@@ -959,6 +947,21 @@ proc setupGC() =
           gc = {arc}
       else:
         gc = {refc}
+  # if the nimscript or javascript backends are specified, enable the vm
+  if {e, js} * be != {}:
+    gc.incl vm
+
+proc setupBackends() =
+  ## use the backends specified on the command-line
+  ## and if those are omitted, select sensible defaults
+  be = specifiedBackend(parameters()).toSet
+  if be == {}:
+    be.incl c                     # always test c
+    if ci:
+      if compilerVersion.get.language == Nim:
+        be.incl cpp               # on ci, add cpp
+      be.incl js                  # on ci, add js
+      be.incl e                   # on ci, add nimscript
 
 proc setupCompilerVersion() =
   ## see if we can figure out which compiler this is
@@ -989,8 +992,11 @@ proc main*(patts: openArray[string]) =
   # sniff the compiler; it affects many runtime decisions
   setupCompilerVersion()
 
-  # now we're equipped to select the memory models to test
-  setupGC()
+  # now we're equipped to select the memory managers to test
+  setupMemoryManagers()
+
+  # ditto the backends
+  setupBackends()
 
   # generate profiles for the ordered inputs
   var profiles: seq[Profile]
