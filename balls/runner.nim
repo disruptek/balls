@@ -253,29 +253,30 @@ if be == {}:
     be.incl js                  # on ci, add js
     be.incl e                   # on ci, add nimscript
 
-# use the memory models specified on the command-line
-let specifiedMM = specifiedMemModel(parameters()).toSet
-var gc* = specifiedMM
-# and if those are omitted, we'll select reasonable defaults
-if gc == {}:
-  if ci:
-    gc = {arc, orc}
-  else:
-    gc = {arc}
+# cache the sniffed compiler version
+var compilerVersion: Option[CompilerVersion]
+
+var gc*: set[MemModel]
 
 # if the nimscript or javascript backends are specified, enable the vm
 if {e, js} * be != {}:
   gc.incl vm
 
 # options common to all profiles
-var defaults* = @["--incremental:off", "--parallelBuild:1"]
+var defaults* = @["--parallelBuild:1"]
 
 let nimExecutable = findExe"nim"
-var compilerVersion: Option[CompilerVersion]
 let valgrindExecutable = findExe"valgrind"
 let useValgrind = "" != valgrindExecutable and
   parseBool(getEnv("BALLS_VALGRIND", $ballsUseValgrind))
 let useSanitizers = parseBool(getEnv("BALLS_SANITIZERS", $ballsUseSanitizers))
+
+proc hasIncremental(cv: CompilerVersion): bool =
+  case cv.language
+  of NimSkull:
+    false
+  of Nim:
+    cv.version >= V(1, 6, 0)
 
 proc shortCompilerVer*(cv: CompilerVersion): string =
   result = fmt"{cv.language}-{cv.version}"
@@ -305,16 +306,17 @@ proc options*(p: Profile): seq[string] =
 
   # add a memory management option if appropriate
   if p.gc != vm:
-    if ci:
-      # skip the spam when on ci
-      when defined(isNimSkull):
-        result.add "--gc:" & $p.gc
-      else:
-        result.add "--mm:" & $p.gc
-    else:
-      # use a switch which will likely work and merely spam
-      # mainline nim users with, "hey, we now use --gc:..."
-      result.add "--gc:" & $p.gc
+    # render the --gc cli option as necessary
+    let gc =
+      case compilerVersion.get.language
+      of NimSkull:
+        "--gc:$gc"
+      of Nim:
+        if compilerVersion.get.version >= V(1, 6, 0):
+          "--mm:$gc"
+        else:
+          "--gc:$gc"
+    result.add: gc % ["gc", $p.gc]
 
   # grab the user's overrides provided on the command-line
   var params = parameters()
@@ -324,7 +326,10 @@ proc options*(p: Profile): seq[string] =
   params = filteredOptimizer params
   params = filteredBackend params
 
-  when defined(isNimSkull):
+  if compilerVersion.get.hasIncremental:
+    params.add "--incremental:off"
+
+  if compilerVersion.get.language == NimSkull:
     if not params.parameter("threads:off"):
       params.add "--threads:on"
 
@@ -337,7 +342,12 @@ proc options*(p: Profile): seq[string] =
 
   # use goto exceptions only in c
   if p.be == c:
-    result.add "--exceptions:goto"
+    case compilerVersion.get.language
+    of NimSkull:
+      result.add "--exceptions:goto"
+    of Nim:
+      if compilerVersion.get.version >= V(1, 2, 0):
+        result.add "--exceptions:goto"
 
   if p.an != Execution:
     # adjust the debugging symbols for analysis builds
@@ -474,7 +484,7 @@ proc hints*(p: Profile; ci: bool): seq[string] =
     if p.opt notin {danger}:
       # ignore performance warnings outside of local danger builds
       omit.add "Performance"
-    when defined(isNimSkull):
+    if compilerVersion.get.language == NimSkull:
       omit.add "LineTooLong"
   for hint in omit.items:
     result.add "--hint[$#]=off" % [ hint ]
@@ -485,7 +495,7 @@ proc hints*(p: Profile; ci: bool): seq[string] =
     # remove spam from ci logs
     omit.add ["UnusedImport", "ProveInit", "ObservableStores",
               "UnreachableCode"]
-    when not defined(isNimSkull):
+    if compilerVersion.get.language == Nim:
       omit.add ["CaseTransition", "BareExcept"]
   for warning in omit.items:
     result.add "--warning[$#]=off" % [ warning ]
@@ -930,6 +940,38 @@ proc findTestsViaPatterns*(patts: openArray[string]): seq[string] =
       pattern = makePattern patt
       result &= ordered(".", pattern)
 
+proc setupGC() =
+  # use the memory models specified on the command-line
+  gc = gc + specifiedMemModel(parameters()).toSet
+  # and if those are omitted, we'll select reasonable defaults
+  if gc == {}:
+    case compilerVersion.get.language
+    of NimSkull:
+      if ci:
+        gc = {arc, orc}
+      else:
+        gc = {arc}
+    of Nim:
+      if compilerVersion.get.version >= V(1, 4, 0):
+        if ci:
+          gc = {arc, orc}
+        else:
+          gc = {arc}
+      else:
+        gc = {refc}
+
+proc setupCompilerVersion() =
+  ## see if we can figure out which compiler this is
+  compilerVersion = runCompilerVersion()
+  if compilerVersion.isNone:
+    let language =
+      when defined(isNimSkull):
+        NimSkull
+      else:
+        Nim
+    compilerVersion = some: CompilerVersion(language: language,
+                                            version: nimVersion)
+
 proc main*(patts: openArray[string]) =
   ## Run each of `pattern`-matching tests, if provided, else run the default tests.
   var tests: seq[string]
@@ -944,10 +986,11 @@ proc main*(patts: openArray[string]) =
       checkpoint "no tests found for patterns:", repr(patts)
       quit 0
 
-  # see if we can figure out which compiler this is
-  compilerVersion = runCompilerVersion()
-  if compilerVersion.isNone:
-    checkpoint "unable to find/parse compiler --version; continuing..."
+  # sniff the compiler; it affects many runtime decisions
+  setupCompilerVersion()
+
+  # now we're equipped to select the memory models to test
+  setupGC()
 
   # generate profiles for the ordered inputs
   var profiles: seq[Profile]
