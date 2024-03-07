@@ -376,7 +376,7 @@ else:
     Grenade = object
       exitCode: Atomic[int]
 
-  when defined(isNimSkull):
+  when defined(isNimSkull) or defined(nlvm):  # best we can do
     proc `=destroy`(grenade: var Grenade) =
       quit load(grenade.exitCode)
   else:

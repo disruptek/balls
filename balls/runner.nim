@@ -261,7 +261,7 @@ let useSanitizers = parseBool(getEnv("BALLS_SANITIZERS", $ballsUseSanitizers))
 
 proc hasIncremental(cv: CompilerVersion): bool =
   case cv.language
-  of NimSkull:
+  of NimSkull, NLVM:
     false
   of Nim:
     cv.version >= V(1, 6, 0)
@@ -299,7 +299,7 @@ proc options*(p: Profile): seq[string] =
       case compilerVersion.get.language
       of NimSkull:
         "--gc:$gc"
-      of Nim:
+      of Nim, NLVM:
         if compilerVersion.get.version >= V(1, 6, 0):
           "--mm:$gc"
         else:
@@ -317,9 +317,15 @@ proc options*(p: Profile): seq[string] =
   if compilerVersion.get.hasIncremental:
     params.add "--incremental:off"
 
-  if compilerVersion.get.language == NimSkull:
+  case compilerVersion.get.language
+  of NimSkull:
     if not params.parameter("threads:off"):
       params.add "--threads:on"
+  of NLVM:
+    params.add "--define:nlvm=on"
+    params.add "--path=$nim/../nlvm-lib"
+  of Nim:
+    discard
 
   # and otherwise pass those options on to the compiler
   result.add params
@@ -332,7 +338,9 @@ proc options*(p: Profile): seq[string] =
   if p.be == c:
     case compilerVersion.get.language
     of NimSkull:
-      result.add "--exceptions:goto"
+      discard  # goto is apparently the only option for skullions
+    of NLVM:
+      discard  # probably best to let nlvm handle exceptions
     of Nim:
       if compilerVersion.get.version >= V(1, 2, 0):
         result.add "--exceptions:goto"
@@ -928,13 +936,13 @@ proc findTestsViaPatterns*(patts: openArray[string]): seq[string] =
       pattern = makePattern patt
       result &= ordered(".", pattern)
 
-proc setupMemoryManagers() =
+proc setupMemoryManagers*() =
   ## use the memory managers specified on the command-line
   ## and if those are omitted, select reasonable defaults
   gc = specifiedMemManager(parameters()).toSet
   if gc == {}:
     case compilerVersion.get.language
-    of NimSkull:
+    of NimSkull, NLVM:
       if ci:
         gc = {arc, orc}
       else:
@@ -951,7 +959,7 @@ proc setupMemoryManagers() =
   if {e, js} * be != {}:
     gc.incl vm
 
-proc setupBackends() =
+proc setupBackends*() =
   ## use the backends specified on the command-line
   ## and if those are omitted, select sensible defaults
   be = specifiedBackend(parameters()).toSet
@@ -963,7 +971,7 @@ proc setupBackends() =
       be.incl js                  # on ci, add js
       be.incl e                   # on ci, add nimscript
 
-proc setupCompilerVersion() =
+proc setupCompilerVersion*() =
   ## see if we can figure out which compiler this is
   compilerVersion = runCompilerVersion()
   if compilerVersion.isNone:
@@ -974,6 +982,14 @@ proc setupCompilerVersion() =
         Nim
     compilerVersion = some: CompilerVersion(language: language,
                                             version: nimVersion)
+  else:
+    # best we can do
+    const nlvm_1_6_16 = "7cbdc34ee42d9ca6899456b0ffd2b8f76e5ba1b7"
+    case compilerVersion.get.git
+    of nlvm_1_6_16:
+      compilerVersion.get.language = NLVM
+    else:
+      discard
 
 proc main*(patts: openArray[string]) =
   ## Run each of `pattern`-matching tests, if provided, else run the default tests.
