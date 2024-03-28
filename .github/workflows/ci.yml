@@ -64,9 +64,9 @@ jobs:
         compiler:
           - name: nim
             version: devel
-          - name: nimskull
-            version: "*"
-            docs: true
+#          - name: nimskull
+#            version: "*"
+#            docs: true
     name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }})"
     runs-on: ${{ matrix.os }}
     steps:
