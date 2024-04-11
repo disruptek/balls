@@ -379,6 +379,9 @@ else:
   when defined(isNimSkull) or defined(nlvm):  # best we can do
     proc `=destroy`(grenade: var Grenade) =
       quit load(grenade.exitCode)
+  elif (NimMajor, NimMinor) < (2, 0):
+    proc `=destroy`(grenade: var Grenade) =
+      quit load(grenade.exitCode)
   else:
     proc `=destroy`(grenade: Grenade) =
       let p = addr grenade.exitCode
