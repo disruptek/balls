@@ -602,12 +602,11 @@ proc perform*(matrix: var Matrix; profs: seq[Profile]) =
 proc profiles*(fn: string): seq[Profile] =
   ## Produce profiles for a given test filename.
   for opt in opt.keys:
-    if not ci or opt > debug:         # omit debug on ci
-      for gc in gc.items:
-        for be in be.items:
-          var profile = Profile(fn: fn, gc: gc, be: be, opt: opt)
-          if not profile.nonsensical:
-            result.add profile
+    for gc in gc.items:
+      for be in be.items:
+        var profile = Profile(fn: fn, gc: gc, be: be, opt: opt)
+        if not profile.nonsensical:
+          result.add profile
 
 proc ordered*(directory: string; testsOnly = true): seq[string] =
   ## Order a directory tree of test files usefully; set `testsOnly`
