@@ -738,42 +738,48 @@ proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
   var began: Table[Profile, MonoTime]
   template dirty: untyped = (getMonoTime() - last).inMilliseconds > old
   while true:
-    if not box.tryRecv mail:
+    case box.tryRecv(mail)
+    of Received:
+      discard "code follows"
+    of Unreadable:
+      break
+    else:
       # there's nothing waiting; dump the matrix?
       if dirty():
         # dump matrix updates only outside ci
         if not ci:
           checkpoint matrix
           last = getMonoTime()
-      mail = recv box
-    if dismissed mail:
-      break
+
+      # wait for next item
+      discard box.waitForPoppable()
+      continue
+
+    # update the matrix with the profile->status
+    tables.`[]=`(matrix, mail.profile, mail.status)
+    case mail.status
+    of Wait: discard
+    of Runs:
+      began[mail.profile] = getMonoTime()  # remember when we started
     else:
-      # update the matrix with the profile->status
-      tables.`[]=`(matrix, mail.profile, mail.status)
-      case mail.status
-      of Wait: discard
-      of Runs:
-        began[mail.profile] = getMonoTime()  # remember when we started
-      else:
-        # check to see if we should crash
-        if matrix.shouldCrash(mail.profile):
-          when false:
-            setBallsResult int(matrix[p] > Part)
-          pleaseCrash.store true
-        elif not pleaseExit():
-          reset last
-      if ci:
-        # in ci, if the status is notable or we're not crashing,
-        if not pleaseExit() and mail.status notin {Skip, Wait}:
-          # show some matrix progress in case someone is watching
-          if mail.status > Runs and mail.profile in began:
-            let took = shortDuration: getMonoTime() - began[mail.profile]
-            checkpoint fmt"{mail.status} {mail.profile:<66} {took:>7}"
-          else:
-            checkpoint fmt"{mail.status} {mail.profile:<66}"
-      # send control wherever it needs to go next
-      discard trampoline(Continuation move mail)
+      # check to see if we should crash
+      if matrix.shouldCrash(mail.profile):
+        when false:
+          setBallsResult int(matrix[p] > Part)
+        pleaseCrash.store true
+      elif not pleaseExit():
+        reset last
+    if ci:
+      # in ci, if the status is notable or we're not crashing,
+      if not pleaseExit() and mail.status notin {Skip, Wait}:
+        # show some matrix progress in case someone is watching
+        if mail.status > Runs and mail.profile in began:
+          let took = shortDuration: getMonoTime() - began[mail.profile]
+          checkpoint fmt"{mail.status} {mail.profile:<66} {took:>7}"
+        else:
+          checkpoint fmt"{mail.status} {mail.profile:<66}"
+    # send control wherever it needs to go next
+    discard trampoline(Continuation move mail)
   if dirty():
     checkpoint matrix
 
@@ -823,19 +829,20 @@ proc perform*(profiles: seq[Profile]) =
 
   # setup a debouncing matrix monitor
   var monitor = MonitorService.spawn(updates)
-  defer: quit monitor
+  defer:
+    closeWrite updates
+    join monitor
 
   for cache, profiles in batches.pairs:
     workers.send:
       whelp runBatch(workers, updates, cache, profiles)
 
   # shut down the runtimes as they complete the work
-  for runtime in 1..pool.count:
-    workers.send nil.Continuation
+  closeWrite workers
 
-  # drain the pool
-  while not pool.isEmpty and not pleaseExit():
-    drain pool
+  # join the pool
+  # FIXME: figure out how to loop pleaseExit in
+  join pool
   if pleaseCrash.load:
     quit 1
 
