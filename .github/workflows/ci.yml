@@ -105,8 +105,8 @@ jobs:
 
       - name: Build Nimble
         if: matrix.compiler.name == 'nimskull'
-        path: nimble
         run: |
+          cd ../nimble
           nim c -d:release -o:nimble src/nimble.nim
           cp nimble "$NIMSKULL_BIN/nimble"
           # Add nimble binary folder to PATH too
