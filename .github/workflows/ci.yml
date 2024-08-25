@@ -69,6 +69,12 @@ jobs:
 #            docs: true
     name: "${{ matrix.os }} (${{ matrix.compiler.name }} ${{ matrix.compiler.version }})"
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: project
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,9 +105,8 @@ jobs:
 
       - name: Build Nimble
         if: matrix.compiler.name == 'nimskull'
-        shell: bash
+        path: nimble
         run: |
-          cd nimble
           nim c -d:release -o:nimble src/nimble.nim
           cp nimble "$NIMSKULL_BIN/nimble"
           # Add nimble binary folder to PATH too
@@ -116,18 +121,14 @@ jobs:
 #          sudo apt install --fix-missing valgrind
 
       - name: Dependencies
-        shell: bash
         run: |
-          cd project
           nimble --accept develop
           nimble --accept install
         env:
           NIM: ${{ matrix.compiler.name }}
 
       - name: Tests
-        shell: bash
         run: |
-          cd project
           if [[ $NIM == "nim" ]]; then
             # test cpp under old nim
             balls --path="." --backend:cpp --backend:e
@@ -150,46 +151,34 @@ jobs:
           echo "--define:useMalloc" >> nim.cfg
 
       - name: Sample Success
-        shell: bash
         run: |
-          cd project
           # inspect success example
           nim c --run tests/test.nim
 
       - name: Sample Failure
-        shell: bash
         run: |
-          cd project
           # inspect failure example
           nim c examples/fails.nim
           ! examples/fails
 
       - name: Dry Rebuild
-        shell: bash
         run: |
-          cd project
           # build a dry version of the runner
           echo "--define:ballsDry" >> nim.cfg
           nim c balls.nim
 
       - name: Dry Matrix
-        shell: bash
         run: |
-          cd project
           # inspect matrix
           balls --path="." --backend:js --backend:c
 
       - name: Dry Success
-        shell: bash
         run: |
-          cd project
           # inspect unit tests
           nim c --run tests/test.nim
 
       - name: Dry Failure
-        shell: bash
         run: |
-          cd project
           # inspect failure examples
           nim c examples/fails.nim
           ! examples/fails
