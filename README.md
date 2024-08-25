@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/disruptek/balls/actions/workflows/ci.yml/badge.svg)](https://github.com/disruptek/balls/actions/workflows/ci.yml)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/disruptek/balls?style=flat)](https://github.com/disruptek/balls/releases/latest)
-![Minimum supported Nim version](https://img.shields.io/badge/nim-1.7.3%2B-informational?style=flat&logo=nim)
+![Supported Nim version](https://img.shields.io/badge/nim-2.0.10%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/disruptek/balls?style=flat)](#license)
 
 ## TL;DR
