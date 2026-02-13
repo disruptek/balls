@@ -43,53 +43,103 @@ when not dynamicColor:
     template ansiBackgroundColorCode(x: untyped; bool = true): string {.used.} = ""
     const ansiResetCode {.used.} = ""
 
+# Pre-compute colored versions as constants (only concatenated once)
 const
-  resetStyle*      = ansiResetCode.Styling
-  resultsStyle*    = ansiStyleCode(styleItalic).Styling &
-                     ansiForegroundColorCode(fgWhite, true).Styling
-  informStyle*     = ansiForegroundColorCode(fgBlue, true).Styling
-  commentStyle*    = ansiStyleCode(styleItalic).Styling &
-                     ansiForegroundColorCode(fgWhite, true).Styling
-  lineNumStyle*    = ansiStyleCode(styleItalic).Styling &
-                     ansiForegroundColorCode(fgBlack, true).Styling
-  partialStyle*    = ansiForegroundColorCode(fgYellow, true).Styling
-  successStyle*    = ansiForegroundColorCode(fgGreen).Styling
-  oopsStyle*       = ansiStyleCode(styleBright).Styling &
-                     ansiStyleCode(styleReverse).Styling &
-                     "\e[48;2;255;255;255m".Styling &  # nim bug
-                     ansiForegroundColorCode(fgRed, true).Styling
-  failureStyle*    = ansiForegroundColorCode(fgRed).Styling
-  skippedStyle*    = ansiStyleCode(styleStrikethrough).Styling &
-                     ansiForegroundColorCode(fgMagenta, false).Styling
-  exceptionStyle*  = ansiForegroundColorCode(fgRed, true).Styling
-  sourceStyle*     = ansiForegroundColorCode(fgDefault).Styling
-  viaProcStyle*    = ansiStyleCode(styleItalic).Styling &
-                     ansiForegroundColorCode(fgBlue, false).Styling
-  viaFileStyle*    = ansiStyleCode(styleItalic).Styling &
-                     ansiStyleCode(styleUnderscore).Styling &
-                     ansiForegroundColorCode(fgBlue, true).Styling
-  headerStyle*     = ansiStyleCode(styleItalic).Styling &
-                     ansiStyleCode(styleUnderscore).Styling &
-                     ansiForegroundColorCode(fgCyan, true).Styling
-  leaderStyle*     = ansiStyleCode(styleItalic).Styling &
-                     ansiForegroundColorCode(fgCyan, true).Styling
-  statusStyles*: array[StatusKind, Styling] = [
-    None: resetStyle,
-    Info: informStyle,
-    Wait: informStyle,
-    Runs: informStyle,
-    Pass: successStyle,
-    Skip: commentStyle,
-    Part: partialStyle,
-    Fail: failureStyle,
-    Died: exceptionStyle,
-    Oops: oopsStyle
-  ]
+  coloredResetStyle*      = ansiResetCode
+  coloredResultsStyle*    = ansiStyleCode(styleItalic) & ansiForegroundColorCode(fgWhite, true)
+  coloredInformStyle*     = ansiForegroundColorCode(fgBlue, true)
+  coloredCommentStyle*    = ansiStyleCode(styleItalic) & ansiForegroundColorCode(fgWhite, true)
+  coloredLineNumStyle*    = ansiStyleCode(styleItalic) & ansiForegroundColorCode(fgBlack, true)
+  coloredPartialStyle*    = ansiForegroundColorCode(fgYellow, true)
+  coloredSuccessStyle*    = ansiForegroundColorCode(fgGreen)
+  coloredOopsStyle*       = ansiStyleCode(styleBright) & ansiStyleCode(styleReverse) & "\e[48;2;255;255;255m" & ansiForegroundColorCode(fgRed, true)
+  coloredFailureStyle*    = ansiForegroundColorCode(fgRed)
+  coloredSkippedStyle*    = ansiStyleCode(styleStrikethrough) & ansiForegroundColorCode(fgMagenta, false)
+  coloredExceptionStyle*  = ansiForegroundColorCode(fgRed, true)
+  coloredSourceStyle*     = ansiForegroundColorCode(fgDefault)
+  coloredViaProcStyle*    = ansiStyleCode(styleItalic) & ansiForegroundColorCode(fgBlue, false)
+  coloredViaFileStyle*    = ansiStyleCode(styleItalic) & ansiStyleCode(styleUnderscore) & ansiForegroundColorCode(fgBlue, true)
+  coloredHeaderStyle*     = ansiStyleCode(styleItalic) & ansiStyleCode(styleUnderscore) & ansiForegroundColorCode(fgCyan, true)
+  coloredLeaderStyle*     = ansiStyleCode(styleItalic) & ansiForegroundColorCode(fgCyan, true)
 
-when ballsAuditTimeSpace: # avoid unused warnings
+when ballsAuditTimeSpace:
   const
-    testNumStyle*  = ansiStyleCode(styleItalic).Styling &
-                     ansiForegroundColorCode(fgYellow, true).Styling
+    coloredTestNumStyle*  = ansiStyleCode(styleItalic) & ansiForegroundColorCode(fgYellow, true)
+
+# For static (non-dynamic) color modes, select at compile time
+when not dynamicColor:
+  const
+    resetStyle*      = (if useColor: coloredResetStyle else: "").Styling
+    resultsStyle*    = (if useColor: coloredResultsStyle else: "").Styling
+    informStyle*     = (if useColor: coloredInformStyle else: "").Styling
+    commentStyle*    = (if useColor: coloredCommentStyle else: "").Styling
+    lineNumStyle*    = (if useColor: coloredLineNumStyle else: "").Styling
+    partialStyle*    = (if useColor: coloredPartialStyle else: "").Styling
+    successStyle*    = (if useColor: coloredSuccessStyle else: "").Styling
+    oopsStyle*       = (if useColor: coloredOopsStyle else: "").Styling
+    failureStyle*    = (if useColor: coloredFailureStyle else: "").Styling
+    skippedStyle*    = (if useColor: coloredSkippedStyle else: "").Styling
+    exceptionStyle*  = (if useColor: coloredExceptionStyle else: "").Styling
+    sourceStyle*     = (if useColor: coloredSourceStyle else: "").Styling
+    viaProcStyle*    = (if useColor: coloredViaProcStyle else: "").Styling
+    viaFileStyle*    = (if useColor: coloredViaFileStyle else: "").Styling
+    headerStyle*     = (if useColor: coloredHeaderStyle else: "").Styling
+    leaderStyle*     = (if useColor: coloredLeaderStyle else: "").Styling
+  
+  const
+    statusStyles*: array[StatusKind, Styling] = [
+      None: resetStyle,
+      Info: informStyle,
+      Wait: informStyle,
+      Runs: informStyle,
+      Pass: successStyle,
+      Skip: commentStyle,
+      Part: partialStyle,
+      Fail: failureStyle,
+      Died: exceptionStyle,
+      Oops: oopsStyle
+    ]
+  
+  when ballsAuditTimeSpace:
+    const
+      testNumStyle* = (if useColor: coloredTestNumStyle else: "").Styling
+else:
+  # For dynamic color mode, select at runtime
+  let
+    resetStyle*      {.used.} = (if useColor: coloredResetStyle else: "").Styling
+    resultsStyle*    {.used.} = (if useColor: coloredResultsStyle else: "").Styling
+    informStyle*     {.used.} = (if useColor: coloredInformStyle else: "").Styling
+    commentStyle*    {.used.} = (if useColor: coloredCommentStyle else: "").Styling
+    lineNumStyle*    {.used.} = (if useColor: coloredLineNumStyle else: "").Styling
+    partialStyle*    {.used.} = (if useColor: coloredPartialStyle else: "").Styling
+    successStyle*    {.used.} = (if useColor: coloredSuccessStyle else: "").Styling
+    oopsStyle*       {.used.} = (if useColor: coloredOopsStyle else: "").Styling
+    failureStyle*    {.used.} = (if useColor: coloredFailureStyle else: "").Styling
+    skippedStyle*    {.used.} = (if useColor: coloredSkippedStyle else: "").Styling
+    exceptionStyle*  {.used.} = (if useColor: coloredExceptionStyle else: "").Styling
+    sourceStyle*     {.used.} = (if useColor: coloredSourceStyle else: "").Styling
+    viaProcStyle*    {.used.} = (if useColor: coloredViaProcStyle else: "").Styling
+    viaFileStyle*    {.used.} = (if useColor: coloredViaFileStyle else: "").Styling
+    headerStyle*     {.used.} = (if useColor: coloredHeaderStyle else: "").Styling
+    leaderStyle*     {.used.} = (if useColor: coloredLeaderStyle else: "").Styling
+  
+  var
+    statusStyles* {.used.}: array[StatusKind, Styling] = [
+      None: resetStyle,
+      Info: informStyle,
+      Wait: informStyle,
+      Runs: informStyle,
+      Pass: successStyle,
+      Skip: commentStyle,
+      Part: partialStyle,
+      Fail: failureStyle,
+      Died: exceptionStyle,
+      Oops: oopsStyle
+    ]
+  
+  when ballsAuditTimeSpace:
+    let
+      testNumStyle* {.used.} = (if useColor: coloredTestNumStyle else: "").Styling
 
 {.pop.}
 
@@ -107,7 +157,6 @@ proc output*(n: NimNode): NimNode =
 
 proc prefixLines*(s: NimNode; p: string): NimNode =
   ## prefix each line of multiline input with the given string
-  result = newStmtList()
   var ss: NimNode
   case s.kind
   of nnkCommentStmt:
@@ -118,8 +167,10 @@ proc prefixLines*(s: NimNode; p: string): NimNode =
     ss = s
   else:
     ss = newStmtList s
+  result = newStmtList()
   for line in ss.items:
     result.add infix(p.newLit, "&", line)
+  # Nest the & operations to create proper concatenation
   result = nestList(ident"&", result)
 
 when dynamicColor:
@@ -149,7 +200,7 @@ when dynamicColor:
         nnkStmtList.newTreeFrom n:
           newLit style.string
           n
-          newLit resetStyle.string
+          newLit coloredResetStyle
     result =
       genAstOpt({}, n, colorized):
         withColor(n, colorized, n)
@@ -163,7 +214,7 @@ else:
         nnkStmtList.newTreeFrom n:
           newLit style.string
           n
-          newLit resetStyle.string
+          newLit resetStyle
   else:
     # never any color
     template withColor*(a, b, c: untyped): untyped = c
@@ -172,10 +223,11 @@ else:
 
 macro report*(n: string) =
   ## render a compile-time comment nicely
-  var prefix = lineNumStyle.string & "## " & commentStyle.string
-  var postfix = newLit resetStyle.string
-  let colorized {.used.} = output infix(prefixLines(n, prefix), "&", postfix)
-  let bland {.used.} = output prefixLines(n, "## ")
+  let coloredPrefix = coloredLineNumStyle & "## " & coloredCommentStyle
+  let plainPrefix = "## "
+  let coloredPostfix = coloredResetStyle
+  let colorized {.used.} = output infix(prefixLines(n, coloredPrefix), "&", newLit coloredPostfix)
+  let bland {.used.} = output prefixLines(n, plainPrefix)
   result =
     genAstOpt({}, bland, colorized):
       withColor(bland, colorized, bland)
@@ -204,11 +256,9 @@ proc renderFilenameAndLine*(s: LineInfo): string =
 proc comment*(n: NimNode): NimNode =
   ## render a comment with the given stringish node
   let bland {.used.} = infix(newLit"## ", "&", n)
+  let coloredPrefix = coloredLineNumStyle & "## "
   let colorized {.used.} =
-    nestList ident"&":
-      nnkStmtList.newTreeFrom n:
-        newLit lineNumStyle.string & "## "
-        n
+    infix(infix(newLit coloredPrefix, "&", n), "&", newLit coloredResetStyle)
   result =
     genAstOpt({}, bland, colorized):
       withColor(bland, colorized, bland)

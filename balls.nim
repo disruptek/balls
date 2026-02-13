@@ -86,9 +86,9 @@ proc numberLinesCT(s: string; first = 1): NimNode =
   ## prefix each line of multiline input with a rendered line number
   result = newStmtList()
   for n, line in pairs(splitLines(s, keepEol = true)):
-    var ln = lineNumStyle & align($(n + first), LNcols).newLit
+    var ln = infix(newLit coloredLineNumStyle, "&", align($(n + first), LNcols).newLit)
     ln = infix(ln, "&", "  ".newLit)
-    ln = infix(ln, "&", sourceStyle & line.newLit)
+    ln = infix(ln, "&", infix(newLit coloredSourceStyle, "&", line.newLit))
     result.add ln
 
 proc numberLinesRT(s: string; first = 1): seq[string] =
@@ -255,7 +255,7 @@ proc success(t: var Test): NimNode =
   t.status = Pass
   result = newStmtList()
   result.add t.incResults
-  result.add t.output(successStyle & newLit(t.name))
+  result.add t.output(infix(newLit coloredSuccessStyle, "&", newLit(t.name)))
 
 type
   LN = int
@@ -399,14 +399,14 @@ proc failure(t: var Test; n: NimNode = nil): NimNode {.used.} =
   t.status = Fail
   result = newStmtList()
   result.add t.incResults
-  result.add t.output(failureStyle & newLit(t.name))
+  result.add t.output(infix(newLit coloredFailureStyle, "&", newLit(t.name)))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
 
 proc dotMsg(n: NimNode): NimNode =
   ## render an exception's .msg field
-  result = commentStyle & newDotExpr(n, ident"msg")
+  result = infix(newLit coloredCommentStyle, "&", newDotExpr(n, ident"msg"))
 
 proc exceptionString(n: NimNode): NimNode =
   ## render an exception with name and message
@@ -420,10 +420,10 @@ proc badassert(t: var Test; n: NimNode = nil): NimNode =
   result = newStmtList()
   result.add t.incResults
   if n.isNil:
-    result.add t.output(failureStyle & newLit(t.name))
+    result.add t.output(infix(newLit coloredFailureStyle, "&", newLit(t.name)))
   else:
     let text = newStmtList(t.name.newLit, newLit(": "), n.dotMsg)
-    result.add t.output(failureStyle & nestList(ident"&", text))
+    result.add t.output(infix(newLit coloredFailureStyle, "&", nestList(ident"&", text)))
   result.add t.renderSource
   result.add t.setExitCode
 
@@ -437,7 +437,7 @@ proc skipped(t: var Test; n: NimNode): NimNode =
       t.output:
         nestList bindSym"&":
           nnkStmtList.newTreeFrom n:
-            skippedStyle & t.name.newLit
+            infix(newLit coloredSkippedStyle, "&", t.name.newLit)
             newLit": "
             n.dotMsg
 
@@ -448,7 +448,7 @@ proc exception(t: var Test; n: NimNode): NimNode =
   let text = newStmtList(newLit(t.name & ": "), n.exceptionString)
   result = newStmtList()
   result.add t.incResults
-  result.add t.output(exceptionStyle & nestList(ident"&", text))
+  result.add t.output(infix(newLit coloredExceptionStyle, "&", nestList(ident"&", text)))
   result.add t.renderSource
   result.add t.renderTrace(n)
   result.add t.setExitCode
@@ -471,7 +471,7 @@ proc reportResults(): NimNode =
   var results = bindSym"testResults"
   var legend = newStmtList()
   add legend:
-    comment resultsStyle & newLit($totalTests() & " tests  ")
+    comment infix(newLit coloredResultsStyle, "&", infix(newLit($totalTests()), "&", newLit" tests  "))
   for status in items(StatusKind):
     add legend, newLit"  "             # space the legend contents
     # essentially, Pass -> results[2]
@@ -562,7 +562,7 @@ proc postTest(test: Test): NimNode =
     # compose the status line
     var text = newStmtList()
     add text:        # the test number with extra styling
-      testNumStyle & pad(newLit $test.number, 5)
+      infix(newLit coloredTestNumStyle, "&", pad(newLit $test.number, 5))
     add text:        # the change in memory footprint after the test
       pad(humanize tempMem, 30)
     add text:        # a short duration representing how long the test took
@@ -578,7 +578,7 @@ proc compilerr(t: var Test): NimNode {.used.} =
   t.status = Oops
   result = newStmtList()
   result.add t.incResults
-  result.add t.output(oopsStyle & newLit(t.name & ": compile failed"))
+  result.add t.output(infix(newLit coloredOopsStyle, "&", newLit(t.name & ": compile failed")))
   result.add t.renderSource
   result.add t.setExitCode
   result.add t.postTest
