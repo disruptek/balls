@@ -85,8 +85,6 @@ when not dynamicColor:
     viaFileStyle*    = (if useColor: coloredViaFileStyle else: "").Styling
     headerStyle*     = (if useColor: coloredHeaderStyle else: "").Styling
     leaderStyle*     = (if useColor: coloredLeaderStyle else: "").Styling
-  
-  const
     statusStyles*: array[StatusKind, Styling] = [
       None: resetStyle,
       Info: informStyle,
@@ -99,7 +97,7 @@ when not dynamicColor:
       Died: exceptionStyle,
       Oops: oopsStyle
     ]
-  
+
   when ballsAuditTimeSpace:
     const
       testNumStyle* = (if useColor: coloredTestNumStyle else: "").Styling
@@ -122,8 +120,6 @@ else:
     viaFileStyle*    {.used.} = (if useColor: coloredViaFileStyle else: "").Styling
     headerStyle*     {.used.} = (if useColor: coloredHeaderStyle else: "").Styling
     leaderStyle*     {.used.} = (if useColor: coloredLeaderStyle else: "").Styling
-  
-  var
     statusStyles* {.used.}: array[StatusKind, Styling] = [
       None: resetStyle,
       Info: informStyle,
@@ -136,7 +132,7 @@ else:
       Died: exceptionStyle,
       Oops: oopsStyle
     ]
-  
+
   when ballsAuditTimeSpace:
     let
       testNumStyle* {.used.} = (if useColor: coloredTestNumStyle else: "").Styling
