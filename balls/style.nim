@@ -10,6 +10,9 @@ type
 
 proc `&`*(a, b: Styling): Styling {.borrow.}
 
+proc newLit*(s: Styling): NimNode =
+  newLit(s.string)
+
 {.push hint[ConvFromXtoItselfNotNeeded]: off.}
 
 # the idea here is to reduce the amount of ast generated in the event we
@@ -107,7 +110,6 @@ proc output*(n: NimNode): NimNode =
 
 proc prefixLines*(s: NimNode; p: string): NimNode =
   ## prefix each line of multiline input with the given string
-  result = newStmtList()
   var ss: NimNode
   case s.kind
   of nnkCommentStmt:
@@ -118,8 +120,10 @@ proc prefixLines*(s: NimNode; p: string): NimNode =
     ss = s
   else:
     ss = newStmtList s
+  result = newStmtList()
   for line in ss.items:
     result.add infix(p.newLit, "&", line)
+  # Nest the & operations to create proper concatenation
   result = nestList(ident"&", result)
 
 when dynamicColor:
@@ -147,9 +151,9 @@ when dynamicColor:
     let colorized =
       nestList ident"&":
         nnkStmtList.newTreeFrom n:
-          newLit style.string
+          newLit style
           n
-          newLit resetStyle.string
+          newLit resetStyle
     result =
       genAstOpt({}, n, colorized):
         withColor(n, colorized, n)
@@ -161,9 +165,9 @@ else:
     proc `&`*(style: Styling; n: NimNode): NimNode =
       nestList ident"&":
         nnkStmtList.newTreeFrom n:
-          newLit style.string
+          newLit style
           n
-          newLit resetStyle.string
+          newLit resetStyle
   else:
     # never any color
     template withColor*(a, b, c: untyped): untyped = c
@@ -172,10 +176,11 @@ else:
 
 macro report*(n: string) =
   ## render a compile-time comment nicely
-  var prefix = lineNumStyle.string & "## " & commentStyle.string
-  var postfix = newLit resetStyle.string
-  let colorized {.used.} = output infix(prefixLines(n, prefix), "&", postfix)
-  let bland {.used.} = output prefixLines(n, "## ")
+  let coloredPrefix = lineNumStyle.string & "## " & commentStyle.string
+  let plainPrefix = "## "
+  let coloredPostfix = resetStyle.string
+  let colorized {.used.} = output infix(prefixLines(n, coloredPrefix), "&", newLit coloredPostfix)
+  let bland {.used.} = output prefixLines(n, plainPrefix)
   result =
     genAstOpt({}, bland, colorized):
       withColor(bland, colorized, bland)
@@ -204,11 +209,9 @@ proc renderFilenameAndLine*(s: LineInfo): string =
 proc comment*(n: NimNode): NimNode =
   ## render a comment with the given stringish node
   let bland {.used.} = infix(newLit"## ", "&", n)
+  let coloredPrefix = lineNumStyle.string & "## "
   let colorized {.used.} =
-    nestList ident"&":
-      nnkStmtList.newTreeFrom n:
-        newLit lineNumStyle.string & "## "
-        n
+    infix(infix(newLit coloredPrefix, "&", n), "&", newLit resetStyle.string)
   result =
     genAstOpt({}, bland, colorized):
       withColor(bland, colorized, bland)
