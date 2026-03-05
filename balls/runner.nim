@@ -17,11 +17,12 @@ import std/strutils
 import std/tables
 import std/times
 
-when not (defined(macosx) or defined(osx) or defined(darwin)):
+when defined(macosx) or defined(osx) or defined(darwin):
+  import std/posix
+  import balls/darwin
+else:
   import pkg/insideout
   import pkg/cps
-else:
-  import balls/darwin
 
 import pkg/ups/sanitize
 import pkg/ups/paths
@@ -829,8 +830,8 @@ when defined(macosx) or defined(osx) or defined(darwin):
     # Register signal handler for macOS
     var sa: Sigaction
     sa.sa_handler = macos_signal_handler
-    discard sigaction(SIGINT, addr sa, nil)
-    discard sigaction(SIGTERM, addr sa, nil)
+    discard sigaction(SIGINT, sa, nil)
+    discard sigaction(SIGTERM, sa, nil)
 
     # macOS lacks signalfd.h; using ulock-based sequential fallback for now
     # in the future, this can be expanded with kqueue for true concurrency
@@ -916,7 +917,7 @@ when ballsPatterns == "regex":
 else:
   const directoryPattern = "/***"
   const testDirPattern = "/**/t*"
-  type Pattern = Glob
+  type Pattern = glob.Glob
   proc makePattern*(patt: string): Pattern =
     ## Compile a glob pattern.
     Pattern: glob(patt & ".nim")
