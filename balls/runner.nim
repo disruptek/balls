@@ -833,13 +833,28 @@ when defined(macosx) or defined(osx) or defined(darwin):
     discard sigaction(SIGINT, sa, nil)
     discard sigaction(SIGTERM, sa, nil)
 
+    var matrix: Matrix
     # macOS lacks signalfd.h; using ulock-based sequential fallback for now
-    # in the future, this can be expanded with kqueue for true concurrency
     for profile in profiles:
-      if pleaseExit(): 
-        # Optional: wait if needed using ulock_wait(addr signal_addr, 0)
-        break
-      discard perform profile
+      if pleaseExit(): break
+      
+      # Report we are starting
+      if ci: checkpoint fmt"{Runs} {profile:<66}"
+      
+      let status = perform profile
+      matrix[profile] = status
+      
+      # Report result
+      if ci:
+        checkpoint fmt"{status} {profile:<66}"
+      else:
+        checkpoint matrix
+      
+      if status > Part and matrix.shouldCrash(profile):
+        pleaseCrash.store true
+    
+    if pleaseCrash.load:
+      quit 1
 else:
   proc perform*(profiles: seq[Profile]) =
     ## concurrent testing of the provided profiles
