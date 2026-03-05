@@ -17,8 +17,10 @@ import std/strutils
 import std/tables
 import std/times
 
-import pkg/insideout
-import pkg/cps
+when not (defined(macosx) or defined(osx) or defined(darwin)):
+  import pkg/insideout
+  import pkg/cps
+
 import pkg/ups/sanitize
 import pkg/ups/paths
 import pkg/ups/compilers
@@ -714,135 +716,143 @@ proc shouldCrash(matrix: var Matrix; p: Profile): bool =
     else:
       checkpoint "failure; unable to run compiler $#" % [ nimExecutable ]
 
-type
-  Update = ref object of Continuation
-    profile: Profile
-    status: StatusKind
+when not (defined(macosx) or defined(osx) or defined(darwin)):
+  type
+    Update = ref object of Continuation
+      profile: Profile
+      status: StatusKind
 
-proc setup(c: Update; p: Profile; s: StatusKind): Update {.cpsMagic.} =
-  c.profile = p
-  c.status = s
-  result = c
+  proc setup(c: Update; p: Profile; s: StatusKind): Update {.cpsMagic.} =
+    c.profile = p
+    c.status = s
+    result = c
 
-proc statusUpdate(monitor: Mailbox[Update]; profile: Profile;
-                  status: StatusKind) {.cps: Update.} =
-  setup profile, status
-  comeFrom monitor
+  proc statusUpdate(monitor: Mailbox[Update]; profile: Profile;
+                    status: StatusKind) {.cps: Update.} =
+    setup profile, status
+    comeFrom monitor
 
-proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
-  ## debounce status updates received from test attempts
-  var matrix: Matrix
-  var mail: Update
-  var last: MonoTime
-  let old = if ci: 5000 else: 500
-  var began: Table[Profile, MonoTime]
-  template dirty: untyped = (getMonoTime() - last).inMilliseconds > old
-  while true:
-    case box.tryRecv(mail)
-    of Received:
-      discard "code follows"
-    of Unreadable:
-      break
-    else:
-      # there's nothing waiting; dump the matrix?
-      if dirty():
-        # dump matrix updates only outside ci
-        if not ci:
-          checkpoint matrix
-          last = getMonoTime()
+  proc matrixMonitor(box: Mailbox[Update]) {.cps: Continuation.} =
+    ## debounce status updates received from test attempts
+    var matrix: Matrix
+    var mail: Update
+    var last: MonoTime
+    let old = if ci: 5000 else: 500
+    var began: Table[Profile, MonoTime]
+    template dirty: untyped = (getMonoTime() - last).inMilliseconds > old
+    while true:
+      case box.tryRecv(mail)
+      of Received:
+        discard "code follows"
+      of Unreadable:
+        break
+      else:
+        # there's nothing waiting; dump the matrix?
+        if dirty():
+          # dump matrix updates only outside ci
+          if not ci:
+            checkpoint matrix
+            last = getMonoTime()
 
-      # wait for next item
-      discard box.waitForPoppable()
-      continue
+        # wait for next item
+        discard box.waitForPoppable()
+        continue
 
-    # update the matrix with the profile->status
-    tables.`[]=`(matrix, mail.profile, mail.status)
-    case mail.status
-    of Wait: discard
-    of Runs:
-      began[mail.profile] = getMonoTime()  # remember when we started
-    else:
-      # check to see if we should crash
-      if matrix.shouldCrash(mail.profile):
-        when false:
-          setBallsResult int(matrix[p] > Part)
-        pleaseCrash.store true
-      elif not pleaseExit():
-        reset last
-    if ci:
-      # in ci, if the status is notable or we're not crashing,
-      if not pleaseExit() and mail.status notin {Skip, Wait}:
-        # show some matrix progress in case someone is watching
-        if mail.status > Runs and mail.profile in began:
-          let took = shortDuration: getMonoTime() - began[mail.profile]
-          checkpoint fmt"{mail.status} {mail.profile:<66} {took:>7}"
-        else:
-          checkpoint fmt"{mail.status} {mail.profile:<66}"
-    # send control wherever it needs to go next
-    discard trampoline(Continuation move mail)
-  if dirty():
-    checkpoint matrix
+      # update the matrix with the profile->status
+      tables.`[]=`(matrix, mail.profile, mail.status)
+      case mail.status
+      of Wait: discard
+      of Runs:
+        began[mail.profile] = getMonoTime()  # remember when we started
+      else:
+        # check to see if we should crash
+        if matrix.shouldCrash(mail.profile):
+          when false:
+            setBallsResult int(matrix[p] > Part)
+          pleaseCrash.store true
+        elif not pleaseExit():
+          reset last
+      if ci:
+        # in ci, if the status is notable or we're not crashing,
+        if not pleaseExit() and mail.status notin {Skip, Wait}:
+          # show some matrix progress in case someone is watching
+          if mail.status > Runs and mail.profile in began:
+            let took = shortDuration: getMonoTime() - began[mail.profile]
+            checkpoint fmt"{mail.status} {mail.profile:<66} {took:>7}"
+          else:
+            checkpoint fmt"{mail.status} {mail.profile:<66}"
+      # send control wherever it needs to go next
+      discard trampoline(Continuation move mail)
+    if dirty():
+      checkpoint matrix
 
-proc runBatch(home: Mailbox[Continuation]; monitor: Mailbox[Update];
-              cache: string; profiles: seq[Profile]): StatusKind
-  {.cps: Continuation.} =
-  ## run a series of profiles in order
-  try:
-    var queue = profiles.toHeapQueue
+  proc runBatch(home: Mailbox[Continuation]; monitor: Mailbox[Update];
+                cache: string; profiles: seq[Profile]): StatusKind
+    {.cps: Continuation.} =
+    ## run a series of profiles in order
+    try:
+      var queue = profiles.toHeapQueue
 
-    # mark them as waiting
-    var profiles = profiles
-    while profiles.len > 0:
-      statusUpdate(monitor, pop(profiles), Wait)
+      # mark them as waiting
+      var profiles = profiles
+      while profiles.len > 0:
+        statusUpdate(monitor, pop(profiles), Wait)
 
-    while queue.len > 0:
-      let profile = pop queue                     # get a test to run
-      result =
-        if result >= Skip:                        # prior failure?
-          Skip                                    # skip the remainder
-        else:
-          statusUpdate(monitor, profile, Runs)    # mark it running
-          perform profile                         # perform the test
-      statusUpdate(monitor, profile, result)      # record the status
-  finally:
-    removeDir cache                               # remove the cache
+      while queue.len > 0:
+        let profile = pop queue                     # get a test to run
+        result =
+          if result >= Skip:                        # prior failure?
+            Skip                                    # skip the remainder
+          else:
+            statusUpdate(monitor, profile, Runs)    # mark it running
+            perform profile                         # perform the test
+        statusUpdate(monitor, profile, result)      # record the status
+    finally:
+      removeDir cache                               # remove the cache
 
-const MonitorService = whelp matrixMonitor
+  const MonitorService = whelp matrixMonitor
+
 proc perform*(profiles: seq[Profile]) =
   ## concurrent testing of the provided profiles
   if profiles.len == 0:
     return  # no profiles, no problem
 
-  # batch the profiles according to their cache
-  var batches: OrderedTable[string, seq[Profile]]
-  for profile in profiles.items:
-    let cache = profile.cache
-    if cache in batches:
-      batches[cache].add profile
-    else:
-      batches[cache] = @[profile]
+  when defined(macosx) or defined(osx) or defined(darwin):
+    # macOS lacks signalfd.h and other Linux-specific dependencies in insideout
+    for profile in profiles:
+      if pleaseExit(): break
+      discard perform profile
+  else:
+    # batch the profiles according to their cache
+    var batches: OrderedTable[string, seq[Profile]]
+    for profile in profiles.items:
+      let cache = profile.cache
+      if cache in batches:
+        batches[cache].add profile
+      else:
+        batches[cache] = @[profile]
 
-  # make a pool of workers and send them the batches
-  let workers = newMailbox[Continuation]()
-  let updates = newMailbox[Update]()
-  var pool = newPool(ContinuationWaiter, workers, availableProcessors)
+    # make a pool of workers and send them the batches
+    let workers = newMailbox[Continuation]()
+    let updates = newMailbox[Update]()
+    var pool = newPool(ContinuationWaiter, workers, availableProcessors)
 
-  # setup a debouncing matrix monitor
-  var monitor = MonitorService.spawn(updates)
-  defer:
-    closeWrite updates
-    join monitor
+    # setup a debouncing matrix monitor
+    var monitor = MonitorService.spawn(updates)
+    defer:
+      closeWrite updates
+      join monitor
 
-  for cache, profiles in batches.pairs:
-    workers.send:
-      whelp runBatch(workers, updates, cache, profiles)
+    for cache, profiles in batches.pairs:
+      workers.send:
+        whelp runBatch(workers, updates, cache, profiles)
 
-  # shut down the runtimes as they complete the work
-  closeWrite workers
+    # shut down the runtimes as they complete the work
+    closeWrite workers
 
-  # join the pool
-  # FIXME: figure out how to loop pleaseExit in
-  join pool
+    # join the pool
+    # FIXME: figure out how to loop pleaseExit in
+    join pool
   if pleaseCrash.load:
     quit 1
 
