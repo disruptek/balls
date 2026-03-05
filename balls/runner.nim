@@ -16,10 +16,12 @@ import std/strformat
 import std/strutils
 import std/tables
 import std/times
+import std/cpuinfo
 
 when defined(macosx) or defined(osx) or defined(darwin):
   import std/posix
   import balls/darwin
+  import std/threadpool
 else:
   import pkg/insideout
   import pkg/cps
@@ -823,9 +825,12 @@ when defined(macosx) or defined(osx) or defined(darwin):
     discard ulock_wake(addr signal_addr)
 
   proc perform*(profiles: seq[Profile]) =
-    ## concurrent testing of the provided profiles
+    ## concurrent testing of the provided profiles on macOS
     if profiles.len == 0:
-      return  # no profiles, no problem
+      return
+
+    # Set QoS for the main thread
+    discard pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0)
 
     # Register signal handler for macOS
     var sa: Sigaction
@@ -834,24 +839,34 @@ when defined(macosx) or defined(osx) or defined(darwin):
     discard sigaction(SIGTERM, sa, nil)
 
     var matrix: Matrix
-    # macOS lacks signalfd.h; using ulock-based sequential fallback for now
+    var L: Lock
+    initLock(L)
+    
+    # Use a threadpool for parallel execution on macOS
+    # This avoids the insideout/signalfd dependency while providing concurrency
     for profile in profiles:
-      if pleaseExit(): break
-      
-      # Report we are starting
-      if ci: checkpoint fmt"{Runs} {profile:<66}"
-      
-      let status = perform profile
-      matrix[profile] = status
-      
-      # Report result
-      if ci:
-        checkpoint fmt"{status} {profile:<66}"
-      else:
-        checkpoint matrix
-      
-      if status > Part and matrix.shouldCrash(profile):
-        pleaseCrash.store true
+      spawn (proc(p: Profile) =
+        # Set QoS for worker threads to optimize for Apple Silicon
+        discard pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0)
+        
+        if pleaseExit(): return
+        
+        let status = perform(p)
+        
+        withLock L:
+          matrix[p] = status
+          if status > Part and matrix.shouldCrash(p):
+            pleaseCrash.store true
+          
+          # Report result
+          if ci:
+            checkpoint fmt"{status} {p:<66}"
+          else:
+            checkpoint matrix
+      )(profile)
+    
+    sync() # Wait for all spawned tasks to complete
+    deinitLock(L)
     
     if pleaseCrash.load:
       quit 1

@@ -4,9 +4,13 @@ import std/posix
 when defined(macosx) or defined(osx) or defined(darwin):
   const
     EVFILT_SIGNAL* = -6
+    EVFILT_PROC* = -5
     EV_ADD* = 0x0001
     EV_ENABLE* = 0x0004
+    EV_ONESHOT* = 0x0010
     EV_CLEAR* = 0x0020
+    NOTE_EXIT* = 0x80000000.uint32
+    
     SFD_NONBLOCK* = 0x800
     SFD_CLOEXEC* = 0x80000
 
@@ -61,6 +65,17 @@ when defined(macosx) or defined(osx) or defined(darwin):
 
   proc ulock_wake*(addr_ptr: pointer, flags: uint32 = UL_COMPARE_AND_WAIT): cint =
     result = syscall(SYS_ulock_wake, flags, addr_ptr, 0).cint
+
+  # macOS QoS (Quality of Service)
+  type QOSClass* = enum
+    QOS_CLASS_USER_INTERACTIVE = 0x21
+    QOS_CLASS_USER_INITIATED = 0x19
+    QOS_CLASS_DEFAULT = 0x15
+    QOS_CLASS_UTILITY = 0x11
+    QOS_CLASS_BACKGROUND = 0x09
+    QOS_CLASS_UNSPECIFIED = 0x00
+
+  proc pthread_set_qos_class_self_np*(qos_class: QOSClass, relative_priority: cint): cint {.importc, header: "<pthread.h>".}
 
   type Fd* = cint
 
