@@ -20,6 +20,8 @@ import std/times
 when not (defined(macosx) or defined(osx) or defined(darwin)):
   import pkg/insideout
   import pkg/cps
+else:
+  import balls/darwin
 
 import pkg/ups/sanitize
 import pkg/ups/paths
@@ -812,17 +814,37 @@ when not (defined(macosx) or defined(osx) or defined(darwin)):
 
   const MonitorService = whelp matrixMonitor
 
-proc perform*(profiles: seq[Profile]) =
-  ## concurrent testing of the provided profiles
-  if profiles.len == 0:
-    return  # no profiles, no problem
+when defined(macosx) or defined(osx) or defined(darwin):
+  var signal_addr: uint32 = 0
 
-  when defined(macosx) or defined(osx) or defined(darwin):
-    # macOS lacks signalfd.h and other Linux-specific dependencies in insideout
+  proc macos_signal_handler(sig: cint) {.noconv.} =
+    # Wake the thread waiting on signal_addr using macOS private API
+    discard ulock_wake(addr signal_addr)
+
+  proc perform*(profiles: seq[Profile]) =
+    ## concurrent testing of the provided profiles
+    if profiles.len == 0:
+      return  # no profiles, no problem
+
+    # Register signal handler for macOS
+    var sa: Sigaction
+    sa.sa_handler = macos_signal_handler
+    discard sigaction(SIGINT, addr sa, nil)
+    discard sigaction(SIGTERM, addr sa, nil)
+
+    # macOS lacks signalfd.h; using ulock-based sequential fallback for now
+    # in the future, this can be expanded with kqueue for true concurrency
     for profile in profiles:
-      if pleaseExit(): break
+      if pleaseExit(): 
+        # Optional: wait if needed using ulock_wait(addr signal_addr, 0)
+        break
       discard perform profile
-  else:
+else:
+  proc perform*(profiles: seq[Profile]) =
+    ## concurrent testing of the provided profiles
+    if profiles.len == 0:
+      return  # no profiles, no problem
+
     # batch the profiles according to their cache
     var batches: OrderedTable[string, seq[Profile]]
     for profile in profiles.items:
