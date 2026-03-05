@@ -5,11 +5,13 @@ when defined(macosx) or defined(osx) or defined(darwin):
   const
     EVFILT_SIGNAL* = -6
     EVFILT_PROC* = -5
+    EVFILT_VM* = -12
     EV_ADD* = 0x0001
     EV_ENABLE* = 0x0004
     EV_ONESHOT* = 0x0010
     EV_CLEAR* = 0x0020
     NOTE_EXIT* = 0x80000000.uint32
+    NOTE_VM_PRESSURE* = 0x80000000.uint32
     
     SFD_NONBLOCK* = 0x800
     SFD_CLOEXEC* = 0x80000

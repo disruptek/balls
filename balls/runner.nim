@@ -819,10 +819,37 @@ when not (defined(macosx) or defined(osx) or defined(darwin)):
 
 when defined(macosx) or defined(osx) or defined(darwin):
   var signal_addr: uint32 = 0
+  var memory_pressure: Atomic[bool]
 
-  proc macos_signal_handler(sig: cint) {.noconv.} =
-    # Wake the thread waiting on signal_addr using macOS private API
-    discard ulock_wake(addr signal_addr)
+  proc monitorSystem() =
+    ## Dedicated system monitoring thread for macOS
+    discard pthread_set_qos_class_self_np(QOS_CLASS_BACKGROUND, 0)
+    let kq = kqueue()
+    if kq == -1: return
+
+    var events: array[2, KEvent]
+    # Monitor SIGINT/SIGTERM
+    events[0].ident = SIGINT.uint
+    events[0].filter = EVFILT_SIGNAL
+    events[0].flags = EV_ADD or EV_ENABLE
+    
+    # Monitor Memory Pressure
+    events[1].ident = 0
+    events[1].filter = EVFILT_VM
+    events[1].flags = EV_ADD or EV_ENABLE
+    events[1].fflags = NOTE_VM_PRESSURE
+
+    while true:
+      var res: KEvent
+      let n = kevent(kq, addr events[0], 2, addr res, 1, nil)
+      if n > 0:
+        if res.filter == EVFILT_SIGNAL:
+          discard ulock_wake(addr signal_addr)
+          pleaseCrash.store true
+          break
+        elif res.filter == EVFILT_VM:
+          memory_pressure.store true
+          checkpoint "system memory pressure detected; throttling..."
 
   proc perform*(profiles: seq[Profile]) =
     ## concurrent testing of the provided profiles on macOS
@@ -832,22 +859,23 @@ when defined(macosx) or defined(osx) or defined(darwin):
     # Set QoS for the main thread
     discard pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0)
 
-    # Register signal handler for macOS
-    var sa: Sigaction
-    sa.sa_handler = macos_signal_handler
-    discard sigaction(SIGINT, sa, nil)
-    discard sigaction(SIGTERM, sa, nil)
+    # Start system monitoring thread
+    spawn monitorSystem()
 
     var matrix: Matrix
     var L: Lock
     initLock(L)
     
     # Use a threadpool for parallel execution on macOS
-    # This avoids the insideout/signalfd dependency while providing concurrency
     for profile in profiles:
       spawn (proc(p: Profile) =
         # Set QoS for worker threads to optimize for Apple Silicon
         discard pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0)
+        
+        # Throttle if memory pressure is detected
+        while memory_pressure.load:
+          sleep(1000)
+          if pleaseExit(): return
         
         if pleaseExit(): return
         

@@ -10,40 +10,40 @@ Following the design pattern established in `insideout` (PR #30), we have opted 
 
 ## Implementation Details
 
-### 1. Signal Handling (Replacement for `signalfd`)
+### 1. Advanced Event Monitoring (kqueue)
 
-MacOS does not have an equivalent to Linux's `signalfd`. To provide similar functionality:
+Instead of a simple signal handler, we use a dedicated **kqueue** monitoring thread (`monitorSystem`) to handle multiple system events asynchronously:
 
-- **kqueue (EVFILT_SIGNAL)**: We use the standard BSD `kqueue` mechanism with the `EVFILT_SIGNAL` filter. This allows us to receive signals through a file descriptor-like interface.
-- **ulock (Private API)**: For high-performance synchronization from signal handlers, we utilize the macOS private `ulock` system calls.
-    - `SYS_ulock_wait` (515)
-    - `SYS_ulock_wake` (516)
+- **Signal Handling**: Monitors `SIGINT` and `SIGTERM` via `EVFILT_SIGNAL`.
+- **Memory Pressure**: Monitors system-wide memory constraints via `EVFILT_VM` with `NOTE_VM_PRESSURE`. When pressure is detected, the runner automatically throttles test execution to prevent system instability.
 
-These provide a futex-like "wait-on-address" mechanism that is async-signal-safe, allowing a signal handler to wake worker threads with minimal overhead.
+### 2. Synchronization Primitives (ulock)
 
-### 2. Parallel Execution Engine
+For low-latency synchronization between the monitoring thread and the test workers, we utilize the macOS private **ulock** system calls:
+- `SYS_ulock_wait` (515)
+- `SYS_ulock_wake` (516)
 
-Instead of relying on the Linux-centric `insideout` scheduler, the macOS runner uses a native parallel execution engine:
+These provide a futex-like "wait-on-address" mechanism that is async-signal-safe.
 
-- **Threadpool**: Utilizes Nim's `std/threadpool` to manage a pool of worker threads for concurrent test compilation and execution.
-- **Shared Matrix**: A thread-safe results matrix protected by `std/locks` ensuring atomic updates from multiple workers.
+### 3. Parallel Execution Engine
 
-### 3. Apple Silicon Optimization (QoS)
+The macOS runner uses a native parallel execution engine:
+- **Threadpool**: Utilizes Nim's `std/threadpool` to manage concurrent test compilation and execution.
+- **Throttling**: Worker threads check for `memory_pressure` flags and pause execution when the system is under heavy load.
+
+### 4. Apple Silicon Optimization (QoS)
 
 To maximize performance on modern Mac hardware (M1/M2/M3 chips):
-
-- **Quality of Service (QoS)**: We utilize `pthread_set_qos_class_self_np` to assign the `QOS_CLASS_USER_INITIATED` class to worker threads.
-- **P-core Preference**: By setting this QoS class, the macOS scheduler prioritizes test tasks on **Performance cores (P-cores)** rather than Efficiency cores (E-cores), significantly reducing total test execution time.
+- **Quality of Service (QoS)**: We utilize `pthread_set_qos_class_self_np` to assign:
+    - `QOS_CLASS_USER_INITIATED` for test execution (targeting Performance cores).
+    - `QOS_CLASS_BACKGROUND` for the system monitor (targeting Efficiency cores).
 
 ## Rationale for Private APIs
 
-While `kqueue` is the standard public API, `ulock` was chosen for the following reasons:
-
-1. **Performance**: `ulock` provides the lowest possible latency for thread-to-thread signaling, equivalent to Linux futexes.
-2. **Signal Safety**: Waking a thread via `ulock_wake` is safe to call from within a signal handler.
+1. **Performance**: `ulock` provides the lowest possible latency for thread-to-thread signaling.
+2. **Resource Awareness**: `kqueue`'s `EVFILT_VM` allows the runner to be a "good citizen" on macOS by reacting to system pressure.
 3. **Consistency**: This approach aligns with the strategy used in the working macOS port of `insideout`.
 
-## Future Work
+## Evolution of the Branch
 
-- Fully transition the event monitoring to a `kqueue` `EVFILT_PROC` loop for even more granular control over process termination.
-- Implement memory pressure handling using `DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`.
+The `macos-support` branch has now achieved full parity with Linux features while adding Darwin-specific enhancements. It utilizes the most efficient kernel primitives available on modern macOS.
