@@ -663,7 +663,7 @@ proc pleaseExit(): bool =
   ## and whether any test which shouldPass() has failed
   ballsFailFast and pleaseCrash.load
 
-let availableProcessors = parseInt getEnv("BALLS_CORES", $countProcessors())
+let availableProcessors = parseInt getEnv("BALLS_CORES", $osproc.countProcessors())
 
 proc perform*(p: Profile): StatusKind =
   ## Run a single Profile `p` and return its StatusKind.
